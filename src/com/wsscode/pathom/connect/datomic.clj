@@ -193,7 +193,6 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (clojure.pprint/pprint ["SUB" subquery])
     (d/q (assoc dquery :find [[(list 'pull '?e subquery) '...]])
       db)))
 

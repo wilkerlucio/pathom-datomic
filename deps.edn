@@ -1,0 +1,2 @@
+{:deps {com.wsscode/pathom {:mvn/version "2.2.25-SNAPSHOT"}
+        com.datomic/datomic-free {:mvn/version "0.9.5703.21"}}}

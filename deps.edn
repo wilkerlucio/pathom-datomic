@@ -1,2 +1,15 @@
-{:deps {com.wsscode/pathom {:mvn/version "2.2.25-SNAPSHOT"}
-        com.datomic/datomic-free {:mvn/version "0.9.5703.21"}}}
+{:deps
+ {com.wsscode/pathom {:mvn/version "2.2.25-SNAPSHOT"}}
+
+ :aliases
+ {:provided
+  {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}
+
+  :dev
+  {:extra-deps {com.datomic/datomic-free {:mvn/version "0.9.5703.21"}}}
+
+  :test
+  {:extra-paths ["test"]
+   :extra-deps  {com.cognitect/test-runner {:git/url "https://github.com/cognitect-labs/test-runner.git"
+                                            :sha     "209b64504cb3bd3b99ecfec7937b358a879f55c1"}}
+   :main-opts   ["-m" "cognitect.test-runner"]}}}

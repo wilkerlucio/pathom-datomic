@@ -2,6 +2,19 @@
 
 This package includes functions to integrate Datomic with Pathom Connect.
 
+== Setup
+
+Currently supported only with deps:
+
+```clojure
+{:deps {com.wsscode/pathom-datomic {:git/url "https://github.com/wilkerlucio/pathom-datomic.git"
+                                    :sha     ""}}
+```
+
+== Integration
+
+The Datomic integration works by
+
 == Support
 
 If you have any questions, check the `#pathom` channel on Clojurians.

@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.connect.datomic :as pcd]
+            [com.wsscode.pathom.connect.datomic.on-prem :refer [on-prem-config]]
             [com.wsscode.pathom.core :as p]
             [datomic.api :as d]))
 
@@ -571,7 +572,7 @@
     :db/doc         "The artists who contributed to the track"}})
 
 (deftest test-db->schema
-  (is (= (pcd/db->schema db)
+  (is (= (pcd/db->schema on-prem-config db)
          db-schema-output)))
 
 (deftest test-schema->uniques
@@ -609,7 +610,7 @@
            [{:foo [:db/ident]}]))))
 
 (deftest test-pick-ident-key
-  (let [config (pcd/config-parser {::pcd/conn conn} [::pcd/schema-uniques])]
+  (let [config (pcd/config-parser on-prem-config {::pcd/conn conn} [::pcd/schema-uniques])]
     (testing "nothing available"
       (is (= (pcd/pick-ident-key config
                {})
@@ -746,10 +747,8 @@
            {:artist/type {:db/ident :artist.type/person}})
          {:artist/type :artist.type/person})))
 
-(pc/defresolver super-name [env {:artist/keys [name]}]
-  {::pc/input  #{:artist/name}
-   ::pc/output [:artist/super-name]}
-  {:artist/super-name (str "SUPER - " name)})
+(def super-name
+  (pc/single-attr-resolver :artist/name :artist/super-name #(str "SUPER - " %)))
 
 (pc/defresolver artists-before-1600 [env _]
   {::pc/output [{:artist/artists-before-1600 [:db/id]}]}
@@ -781,10 +780,16 @@
      ::p/plugins [(pc/connect-plugin {::pc/register [super-name
                                                      artists-before-1600
                                                      artist-before-1600]})
-                  (pcd/datomic-connect-plugin {::pcd/conn             conn
-                                               ::pcd/ident-attributes #{:artist/type}})
+                  (pcd/datomic-connect-plugin (assoc on-prem-config
+                                                ::pcd/conn conn
+                                                ::pcd/ident-attributes #{:artist/type}))
                   p/error-handler-plugin
                   p/trace-plugin]}))
+
+(comment
+  (parser {}
+    [{[:db/id 637716744120508]
+      [:artist/name]}]))
 
 (deftest test-datomic-parser
   (testing "reading from :db/id"
@@ -862,10 +867,6 @@
               {:artist/type {:db/id 17592186045423}}})))))
 
 (comment
-  (pcd/config-parser {::pcd/conn             conn
-                      ::pcd/ident-attributes #{:foo}}
-    [::pcd/schema-uniques])
-
   (time
     (do
       (-> conn d/db pcd/db->schema)

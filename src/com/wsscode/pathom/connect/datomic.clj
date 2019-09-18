@@ -4,7 +4,6 @@
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.sugar :as ps]
-            [datomic.api :as d]
             [edn-query-language.core :as eql]))
 
 (s/def ::db any?)
@@ -20,10 +19,16 @@
 
 (s/def ::schema (s/map-of :db/ident ::schema-entry))
 
+(defn raw-datomic-q [{::keys [datomic-driver-q]} & args]
+  (apply datomic-driver-q args))
+
+(defn raw-datomic-db [{::keys [datomic-driver-db]} conn]
+  (datomic-driver-db conn))
+
 (defn db->schema
   "Extracts the schema from a Datomic db."
-  [db]
-  (->> (d/q '[:find [(pull ?e [*]) ...]
+  [env db]
+  (->> (raw-datomic-q env '[:find [(pull ?e [*]) ...]
               :where
               [_ :db.install/attribute ?e]
               [?e :db/ident ?ident]]
@@ -164,7 +169,7 @@
 
       (integer? id)
       (post-process-entity env subquery
-        (d/q [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
+        (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
               :in '$ '?e]
           db
           id))
@@ -172,7 +177,7 @@
       (p/ident? id)
       (let [[k v] id]
         (post-process-entity env subquery
-          (d/q [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
+          (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
                 :in '$ '?v
                 :where ['?e k '?v]]
             db
@@ -216,7 +221,7 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (d/q (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery)) '...]])
+    (raw-datomic-q env (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery)) '...]])
       db)))
 
 (defn query-entity
@@ -225,7 +230,7 @@
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
     (post-process-entity env subquery
-      (d/q (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery)) '.])
+      (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery)) '.])
         db))))
 
 (defn index-schema
@@ -249,8 +254,8 @@
             (vals schema)))}))
 
 (def registry
-  [(pc/single-attr-resolver ::conn ::db d/db)
-   (pc/single-attr-resolver ::db ::schema db->schema)
+  [(pc/single-attr-resolver2 ::conn ::db raw-datomic-db)
+   (pc/single-attr-resolver2 ::db ::schema db->schema)
    (pc/single-attr-resolver ::schema ::schema-keys #(into #{:db/id} (keys %)))
    (pc/single-attr-resolver ::schema ::schema-uniques schema->uniques)
    (pc/constantly-resolver ::ident-attributes #{})])
@@ -260,8 +265,9 @@
 (defn normalize-config
   "Fulfill missing configuration options using inferences."
   [config]
-  (config-parser config [::conn ::db ::schema ::schema-uniques ::schema-keys
-                         ::ident-attributes]))
+  (config-parser config config
+    [::conn ::db ::schema ::schema-uniques ::schema-keys ::ident-attributes
+     ::datomic-driver-db ::datomic-driver-q]))
 
 (defn datomic-connect-plugin
   "Plugin to add datomic integration.

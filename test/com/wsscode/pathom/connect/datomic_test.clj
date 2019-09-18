@@ -772,10 +772,7 @@
                                             pc/reader2
                                             pc/open-ident-reader
                                             p/env-placeholder-reader]
-                  ::p/placeholder-prefixes #{">"}
-                  #_#_::p/process-error (fn [env err]
-                                          #_(.printStackTrace err)
-                                          err)}
+                  ::p/placeholder-prefixes #{">"}}
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register [super-name
                                                      artists-before-1600
@@ -785,11 +782,6 @@
                                                 ::pcd/ident-attributes #{:artist/type}))
                   p/error-handler-plugin
                   p/trace-plugin]}))
-
-(comment
-  (parser {}
-    [{[:db/id 637716744120508]
-      [:artist/name]}]))
 
 (deftest test-datomic-parser
   (testing "reading from :db/id"
@@ -867,11 +859,6 @@
               {:artist/type {:db/id 17592186045423}}})))))
 
 (comment
-  (time
-    (do
-      (-> conn d/db pcd/db->schema)
-      nil))
-
   (parser {}
     [{::pc/indexes
       [::pc/index-oir]}])

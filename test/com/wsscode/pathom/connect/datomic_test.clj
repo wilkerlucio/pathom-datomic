@@ -576,23 +576,37 @@
 
 (deftest test-schema->uniques
   (is (= (pcd/schema->uniques db-schema-output)
-         #{:script/name
-           :abstractRelease/gid
+         #{:abstractRelease/gid
            :artist/gid
-           :release/gid
-           :language/name
-           :label/gid
            :country/name
-           :db/ident})))
+           :db/ident
+           :label/gid
+           :language/name
+           :release/gid
+           :script/name})))
 
-(deftest test-filter-subquery
-  (is (= (pcd/filter-subquery {::p/parent-query  [:foo :bar :baz]
-                               ::pcd/schema-keys #{:foo :baz}})
-         [:foo :baz]))
+(deftest test-datomic-subquery
+  (testing "basic sub query computing"
+    (is (= (pcd/datomic-subquery {::p/parent-query  [:foo :bar :baz]
+                                  ::pcd/schema-keys #{:foo :baz}})
+           [:foo :baz])))
 
-  (is (= (pcd/filter-subquery {::p/parent-query  [:foo :bar :baz]
-                               ::pcd/schema-keys #{:foo :baz}})
-         [:foo :baz])))
+  (testing "halt on missing joins"
+    (is (= (pcd/datomic-subquery {::p/parent-query  [:foo {:bar [:baz]}]
+                                  ::pcd/schema-keys #{:foo :baz}})
+           [:foo])))
+
+  (testing "ensure minimal sub query"
+    (is (= (pcd/datomic-subquery {::p/parent-query  [:foo {:baz [:bar]}]
+                                  ::pcd/schema-keys #{:foo :baz}})
+           [:foo {:baz [:db/id]}]))))
+
+(deftest test-inject-ident-subqueries
+  (testing "add ident sub query part on ident fields"
+    (is (= (pcd/inject-ident-subqueries
+             {::pcd/ident-attributes #{:foo}}
+             [:foo])
+           [{:foo [:db/ident]}]))))
 
 (deftest test-pick-ident-key
   (let [config (pcd/config-parser {::pcd/conn conn} [::pcd/schema-uniques])]
@@ -725,6 +739,13 @@
              (p/ast->query))
          [{:foo [:db/id]}])))
 
+(deftest test-post-process-entity
+  (is (= (pcd/post-process-entity
+           {::pcd/ident-attributes #{:artist/type}}
+           [:artist/type]
+           {:artist/type {:db/ident :artist.type/person}})
+         {:artist/type :artist.type/person})))
+
 (pc/defresolver super-name [env {:artist/keys [name]}]
   {::pc/input  #{:artist/name}
    ::pc/output [:artist/super-name]}
@@ -753,15 +774,15 @@
                                             pc/open-ident-reader
                                             p/env-placeholder-reader]
                   ::p/placeholder-prefixes #{">"}
-                  #_ #_
-                  ::p/process-error        (fn [env err]
-                                             #_(.printStackTrace err)
-                                             err)}
+                  #_#_::p/process-error (fn [env err]
+                                          #_(.printStackTrace err)
+                                          err)}
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register [super-name
                                                      artists-before-1600
                                                      artist-before-1600]})
-                  (pcd/datomic-connect-plugin {::pcd/conn conn})
+                  (pcd/datomic-connect-plugin {::pcd/conn             conn
+                                               ::pcd/ident-attributes #{:artist/type}})
                   p/error-handler-plugin
                   p/trace-plugin]}))
 
@@ -794,9 +815,9 @@
                  [:country/name]}]}])
            {:artist/artists-before-1600
             [{:artist/super-name "SUPER - Heinrich Schütz",
-              :artist/country {:country/name "Germany"}}
+              :artist/country    {:country/name "Germany"}}
              {:artist/super-name "SUPER - Choir of King's College, Cambridge",
-              :artist/country {:country/name "United Kingdom"}}]}))
+              :artist/country    {:country/name "United Kingdom"}}]}))
 
     (is (= (parser {}
              [{:artist/artist-before-1600
@@ -826,10 +847,24 @@
       (is (= (parser {}
                [:artist/artist-before-1600])
              {:artist/artist-before-1600
-              {:db/id 690493302253222}})))))
+              {:db/id 690493302253222}})))
+
+    (testing "ident attributes"
+      (is (= (parser {}
+               [{[:db/id 637716744120508]
+                 [:artist/type]}])
+             {[:db/id 637716744120508]
+              {:artist/type :artist.type/person}}))
+      (is (= (parser {}
+               [{[:db/id 637716744120508]
+                 [{:artist/type [:db/id]}]}])
+             {[:db/id 637716744120508]
+              {:artist/type {:db/id 17592186045423}}})))))
 
 (comment
-  (pcd/config-parser {::pcd/conn conn} [::pcd/schema-keys])
+  (pcd/config-parser {::pcd/conn             conn
+                      ::pcd/ident-attributes #{:foo}}
+    [::pcd/schema-uniques])
 
   (time
     (do
@@ -840,10 +875,17 @@
     [{::pc/indexes
       [::pc/index-oir]}])
 
-  (time
-    (parser {}
-      [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
-        [:artist/super-name]}]))
+  (parser {}
+    [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+      [:artist/name
+       {:>/blabla [:artist/super-name]}
+       :artist/type]}])
+
+  (is (= (parser {}
+           [{[:db/id 637716744120508]
+             [:artist/type]}])
+         {[:db/id 637716744120508]
+          {:artist/type :artist.type/person}}))
 
   (->> (d/q '[:find ?attr ?type ?card
               :where

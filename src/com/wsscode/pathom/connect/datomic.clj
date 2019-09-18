@@ -8,8 +8,10 @@
             [edn-query-language.core :as eql]))
 
 (s/def ::db any?)
+(s/def ::schema (s/map-of ::p/attribute map?))
 (s/def ::schema-keys (s/coll-of ::p/attribute :kind set?))
 (s/def ::schema-uniques ::schema-keys)
+(s/def ::ident-attributes ::schema-keys)
 
 (s/def ::schema-entry
   (s/keys
@@ -17,11 +19,6 @@
     :opt [:db/doc :db/unique]))
 
 (s/def ::schema (s/map-of :db/ident ::schema-entry))
-
-(pc/defresolver conn->db-resolver [env {::keys [conn]}]
-  {::pc/input  #{::conn}
-   ::pc/output [::db]}
-  {::db (d/db conn)})
 
 (defn db->schema
   "Extracts the schema from a Datomic db."
@@ -36,11 +33,6 @@
            (assoc schema (:db/ident entry) entry))
          {})))
 
-(pc/defresolver db->schema-resolver [env {::keys [db]}]
-  {::pc/input  #{::db}
-   ::pc/output [::schema]}
-  {::schema (db->schema db)})
-
 (defn schema->uniques
   "Return a set with the ident of the unique attributes in the schema."
   [schema]
@@ -49,12 +41,9 @@
        (filter :db/unique)
        (into #{} (map :db/ident))))
 
-(pc/defresolver schema->uniques-resolver [env {::keys [schema]}]
-  {::pc/input  #{::schema}
-   ::pc/output [::schema-uniques]}
-  {::schema-uniques (schema->uniques schema)})
-
 (defn project-dependencies
+  "Given a ::p/parent-query and ::schema-keys, compute all dependencies required to fulfil
+  the ::p/parent-query."
   [{::keys    [schema-keys]
     ::p/keys  [parent-query]
     ::pc/keys [indexes sort-plan]
@@ -79,14 +68,19 @@
                          (map first))))
           non-datomic)))
 
-(defn ensure-minimum-subquery [ast]
+(defn ensure-minimum-subquery
+  "Ensure the subquery has at least one element, this prevent empty sub-queries to be
+  sent to datomic."
+  [ast]
   (update ast :children
     (fn [items]
       (if (seq items)
         (mapv ensure-minimum-subquery items)
         [{:type :property :key :db/id :dispatch-key :db/id}]))))
 
-(defn filter-subquery
+(defn datomic-subquery
+  "Given a ::p/parent-query, projects dependencies and compute the part of the query
+  that Pathom delegates to Datomic to fulfil."
   [{::p/keys [parent-query]
     ::keys   [schema-keys]
     :as      env}]
@@ -111,6 +105,19 @@
          (hash-map :type :root :children)
          p/ast->query)))
 
+(defn- prop [k]
+  {:type :prop :dispatch-key k :key k})
+
+(defn inject-ident-subqueries [{::keys [ident-attributes]} query]
+  (->> query
+       eql/query->ast
+       (p/transduce-children
+         (map (fn [{:keys [key query] :as ast}]
+                (if (and (contains? ident-attributes key) (not query))
+                  (assoc ast :type :join :query [:db/ident] :children [(prop :db/ident)])
+                  ast))))
+       eql/ast->query))
+
 (defn pick-ident-key
   "Figures which key to use to request data from Datomic. This will
   try to pick :db/id if available, returning the number directly.
@@ -118,18 +125,32 @@
   the map, in case of multiple one will be selected by random. The
   format of the unique return is [:attribute value]."
   [{::keys [schema-uniques]} m]
-  (if
-    (contains? m :db/id)
+  (if (contains? m :db/id)
     (:db/id m)
 
     (let [available (set/intersection schema-uniques (into #{} (keys m)))]
       (if (seq available)
         [(first available) (get m (first available))]))))
 
-(pc/defresolver schema->schema-keys-resolver [_ {::keys [schema]}]
-  {::pc/input  #{::schema}
-   ::pc/output [::schema-keys]}
-  {::schema-keys (into #{:db/id} (keys schema))})
+(def post-process-entity-parser
+  (p/parser {::p/env {::p/reader [(fn [{::keys [ident-attributes]
+                                        :keys  [ast query]
+                                        :as    env}]
+                                    (let [k (:key ast)]
+                                      (if (and (contains? ident-attributes k) (not query))
+                                        (get-in (p/entity env) [k :db/ident])
+                                        ::p/continue)))
+                                  p/map-reader]}}))
+
+(defn post-process-entity
+  "Post process the result from the datomic query. Operations that it does:
+
+  - Pull :db/ident from ident fields"
+  [{::keys [ident-attributes]} subquery entity]
+  (post-process-entity-parser
+    {::p/entity         entity
+     ::ident-attributes ident-attributes}
+    subquery))
 
 (defn datomic-resolve
   "Runs the resolver to fetch Datomic data from identities."
@@ -137,29 +158,31 @@
     :as    config}
    env]
   (let [id       (pick-ident-key config (p/entity env))
-        subquery (filter-subquery (merge env config))]
+        subquery (datomic-subquery (merge env config))]
     (cond
       (nil? id) nil
 
       (integer? id)
-      (d/q [:find (list 'pull '?e subquery) '.
-            :in '$ '?e]
-        db
-        id)
+      (post-process-entity env subquery
+        (d/q [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
+              :in '$ '?e]
+          db
+          id))
 
       (p/ident? id)
       (let [[k v] id]
-        (d/q [:find (list 'pull '?e subquery) '.
-              :in '$ '?v
-              :where ['?e k '?v]]
-          db
-          v)))))
+        (post-process-entity env subquery
+          (d/q [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
+                :in '$ '?v
+                :where ['?e k '?v]]
+            db
+            v))))))
 
 (defn entity-subquery
   "Using the current :query in the env, compute what part of it can be
   delegated to Datomic."
   [{:keys [query] :as env}]
-  (let [subquery (filter-subquery (assoc env ::p/parent-query query ::p/entity {:db/id nil}))]
+  (let [subquery (datomic-subquery (assoc env ::p/parent-query query ::p/entity {:db/id nil}))]
     (cond-> subquery (not (seq subquery)) (conj :db/id))))
 
 (defn query-entities
@@ -193,7 +216,7 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (d/q (assoc dquery :find [[(list 'pull '?e subquery) '...]])
+    (d/q (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery)) '...]])
       db)))
 
 (defn query-entity
@@ -201,8 +224,9 @@
   single result :find, meaning it is effectively more efficient than query-entities."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (d/q (assoc dquery :find [(list 'pull '?e subquery) '.])
-      db)))
+    (post-process-entity env subquery
+      (d/q (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery)) '.])
+        db))))
 
 (defn index-schema
   "Creates Pathom index from Datomic schema."
@@ -213,7 +237,7 @@
      {resolver {::pc/sym            resolver
                 ::pc/cache?         false
                 ::pc/compute-output (fn [env]
-                                      (filter-subquery (merge env config)))
+                                      (datomic-subquery (merge env config)))
                 ::datomic?          true
                 ::pc/resolve        (fn [env _] (datomic-resolve config env))}}
 
@@ -225,17 +249,19 @@
             (vals schema)))}))
 
 (def registry
-  [conn->db-resolver
-   db->schema-resolver
-   schema->schema-keys-resolver
-   schema->uniques-resolver])
+  [(pc/single-attr-resolver ::conn ::db d/db)
+   (pc/single-attr-resolver ::db ::schema db->schema)
+   (pc/single-attr-resolver ::schema ::schema-keys #(into #{:db/id} (keys %)))
+   (pc/single-attr-resolver ::schema ::schema-uniques schema->uniques)
+   (pc/constantly-resolver ::ident-attributes #{})])
 
 (def config-parser (-> registry ps/connect-serial-parser ps/context-parser))
 
 (defn normalize-config
   "Fulfill missing configuration options using inferences."
   [config]
-  (config-parser config [::conn ::db ::schema ::schema-uniques ::schema-keys]))
+  (config-parser config [::conn ::db ::schema ::schema-uniques ::schema-keys
+                         ::ident-attributes]))
 
 (defn datomic-connect-plugin
   "Plugin to add datomic integration.
@@ -243,7 +269,9 @@
   Options:
 
   ::conn (required) - Datomic connection
-  ::db - Datomic db, if not provided will be computed from ::conn"
+  ::ident-attributes - a set containing the attributes to be treated as idents
+  ::db - Datomic db, if not provided will be computed from ::conn
+  "
   [config]
   (let [config'       (normalize-config config)
         datomic-index (index-schema config')]

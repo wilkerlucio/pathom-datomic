@@ -20,7 +20,7 @@ Currently supported only with deps:
 
 ```clojure
 {:deps {com.wsscode/pathom-datomic {:git/url "https://github.com/wilkerlucio/pathom-datomic.git"
-                                    :sha     ""}}
+                                    :sha     "e8364346e6d75de46e0987440906d2d31fdb9744"}}
 ```
 
 == Integration

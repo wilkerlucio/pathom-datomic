@@ -2,7 +2,7 @@
  ["src"]
 
  :deps
- {com.wsscode/pathom {:mvn/version "2.2.25-SNAPSHOT"}}
+ {com.wsscode/pathom {:mvn/version "2.2.25"}}
 
  :aliases
  {:provided

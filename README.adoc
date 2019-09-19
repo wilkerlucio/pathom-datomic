@@ -1,6 +1,18 @@
+:lang: en
+:encoding: UTF-8
+
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
 = Pathom Datomic
 
 This package includes functions to integrate Datomic with Pathom Connect.
+
+WARNING: Project in alpha state, need volunteers to try it out!
 
 == Setup
 
@@ -13,8 +25,178 @@ Currently supported only with deps:
 
 == Integration
 
-The Datomic integration works by
+Using this integration, you provide the Datomic connection to Pathom, then it loads
+your Datomic schema and delegates sub queries to Datomic automatically.
 
-== Support
+The examples in this documentation will be using the link:https://github.com/Datomic/mbrainz-sample[Datomic mbrainz sample database].
 
-If you have any questions, check the `#pathom` channel on Clojurians.
+Example setup:
+
+[source,clojure]
+----
+(ns com.wsscode.pathom.connect.datomic-test
+  (:require [clojure.test :refer :all]
+            [com.wsscode.pathom.connect :as pc]
+            [com.wsscode.pathom.connect.datomic :as pcd]
+            [com.wsscode.pathom.connect.datomic.on-prem :refer [on-prem-config]]
+            [com.wsscode.pathom.core :as p]))
+
+(def parser
+  (p/parser
+    {::p/env     {::p/reader               [p/map-reader
+                                            pc/reader2
+                                            pc/open-ident-reader
+                                            p/env-placeholder-reader]
+                  ::p/placeholder-prefixes #{">"}}
+     ::p/mutate  pc/mutate
+     ::p/plugins [(pc/connect-plugin {::pc/register []})
+                  ; <1>
+                  (pcd/datomic-connect-plugin (assoc on-prem-config ::pcd/conn conn))
+                  p/error-handler-plugin
+                  p/trace-plugin]}))
+----
+
+<1> Datomic connect integration plugin
+
+NOTE: We are using the `on-prem` config for this tutorial, if you wanna connect using
+the client api, get the config from `com.wsscode.pathom.connect.datomic.client/client-config`
+
+This setup will automatically provides entry points using `:db/id` and also one for
+every Datomic attribute marked with `:unique true`.
+
+Example queries we can run:
+
+[source,clojure]
+----
+(parser {}
+  [{[:db/id 637716744120508]
+    [:artist/name]}])
+; => {[:db/id 637716744120508] {:artist/name "Janis Joplin"}}
+
+(parser {}
+    [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+      [:artist/name
+       {:artist/country [:country/name]}]}])
+; => {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+;     #:artist{:name "Janis Joplin"
+;              :country #:country{:name "United States"}}}
+----
+
+When Pathom sees a Datomic attribute, it will compute the sub-query that should be
+delegated to Datomic, issue a single `pull` to fulfil the data, and them walk the
+results to fulfil any extra data that need to come from other resolvers.
+
+To illustrate this point, let's add a new resolver to the game and play with it in
+the query, this resolver will count the number of years that some artist was active,
+considering the start and end year data points:
+
+[source,clojure]
+----
+(pc/defresolver years-active [env {:artist/keys [startYear endYear]}]
+  {::pc/input  #{:artist/startYear :artist/endYear}
+   ::pc/output [:artist/active-years-count]}
+  {:artist/active-years-count (- endYear startYear)})
+
+; then add it to the connect-plugin definition, as:
+; (pc/connect-plugin {::pc/register [years-active]})
+----
+
+Time to play:
+
+[source,clojure]
+----
+(parser {}
+  [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+    [:artist/active-years-count]}])
+; {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"] #:artist{:active-years-count 27}}
+----
+
+Notice that Pathom was able to automatically figure out the dependencies and compute
+the appropriated pull request, which in this case was `[:artist/startYear :artist/endYear]`.
+
+=== Datomic ident values
+
+If you used the Datomic pull syntax, you know this kind of result:
+
+[source,clojure]
+----
+(parser {}
+  [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+    [:artist/type]}])
+=>
+; => {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"] #:artist{:type #:db{:id 17592186045423}}}
+
+; if you are familiar with pull, you know the drill:
+(parser {}
+  [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+    [{:artist/type [:db/ident]}])
+=>
+; => {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"] #:artist{:type #:db{:ident :artist.type/person}}}
+----
+
+Not so good, even with the version we get the actual value `:artist.type/person`, we still
+have to unwrap that.
+
+To facilitate this common scenario, you can configure the integration and tell Pathom
+which attributes should behave as `ident attributes`, this means if you don't do a sub
+query on them, Pathom will request the `:db/ident` and unwrap automatically:
+
+[source,clojure]
+----
+; just the changes to the datomic connect plugin:
+(pcd/datomic-connect-plugin (assoc on-prem-config
+                              ::pcd/conn conn
+                              ::pcd/ident-attributes #{:artist/type}))
+
+; now a different result
+(parser {}
+  [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+    [:artist/type]}])
+=>
+; => {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+       #:artist{:type :artist.type/person}}
+
+; you can still get the entity data using a sub query:
+(parser {}
+  [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+    [{:artist/type [:db/id]}]}])
+=>
+; => {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"] #:artist{:type #:db{:id 17592186045423}}}
+----
+
+=== Custom queries
+
+To handle custom sets of entities, we recommend using the helpers `query-entity` and
+`query-entities`, provided by this library, examples:
+
+[source,clojure]
+----
+(pc/defresolver artists-before-1600 [env _]
+  {::pc/output [{:artist/artists-before-1600 [:db/id]}]}
+  {:artist/artists-before-1600
+   (pcd/query-entities env
+     '{:where [[?e :artist/name ?name]
+               [?e :artist/startYear ?year]
+               [(< ?year 1600)]]})})
+
+; using the resolver
+(parser {}
+  [{:artist/artist-before-1600
+    [:artist/name
+     :artist/active-years-count
+     {:artist/country
+      [:country/name]}]}])
+=>
+; #:artist{:artist-before-1600 #:artist{:name "Heinrich Schütz",
+;                                       :active-years-count 87,
+;                                       :country #:country{:name "Germany"}}}
+----
+
+Note the Datalog query `must` use the map format. The `:find` part will be automatically
+fulfilled by Pathom, considering the sub query requested in the process, this way you
+don't need to care ahead of time.
+
+== Next steps
+
+We need to figure a way to handle security, currently this integration opens too much
+for most use cases, if you have ideas please let's talk at #pathom on Clojurians!

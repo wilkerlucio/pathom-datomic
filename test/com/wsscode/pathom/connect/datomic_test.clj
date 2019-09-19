@@ -750,6 +750,11 @@
 (def super-name
   (pc/single-attr-resolver :artist/name :artist/super-name #(str "SUPER - " %)))
 
+(pc/defresolver years-active [env {:artist/keys [startYear endYear]}]
+  {::pc/input  #{:artist/startYear :artist/endYear}
+   ::pc/output [:artist/active-years-count]}
+  {:artist/active-years-count (- endYear startYear)})
+
 (pc/defresolver artists-before-1600 [env _]
   {::pc/output [{:artist/artists-before-1600 [:db/id]}]}
   {:artist/artists-before-1600
@@ -775,6 +780,7 @@
                   ::p/placeholder-prefixes #{">"}}
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register [super-name
+                                                     years-active
                                                      artists-before-1600
                                                      artist-before-1600]})
                   (pcd/datomic-connect-plugin (assoc on-prem-config
@@ -782,6 +788,12 @@
                                                 ::pcd/ident-attributes #{:artist/type}))
                   p/error-handler-plugin
                   p/trace-plugin]}))
+
+(comment
+  (parser {}
+    [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+      [:artist/name
+       {:artist/country [:country/name]}]}]))
 
 (deftest test-datomic-parser
   (testing "reading from :db/id"
@@ -859,15 +871,26 @@
               {:artist/type {:db/id 17592186045423}}})))))
 
 (comment
+  (pcd/config-parser on-prem-config {::pcd/conn conn} [::pcd/schema-keys])
+
   (parser {}
     [{::pc/indexes
       [::pc/index-oir]}])
 
   (parser {}
     [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+      [:artist/active-years-count]}])
+
+  (parser {}
+    [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+      [:artist/type]}])
+
+  (parser {}
+    [{:artist/artist-before-1600
       [:artist/name
-       {:>/blabla [:artist/super-name]}
-       :artist/type]}])
+       :artist/active-years-count
+       {:artist/country
+        [:country/name]}]}])
 
   (is (= (parser {}
            [{[:db/id 637716744120508]
@@ -902,10 +925,10 @@
     "Janis Joplin")
 
   (d/q '{:find  [[(pull ?e [*]) ...]]
-         :where [[?e :artist/name ?name]
-                 [?e :artist/startYear ?year]
-                 [(< ?year 1600)]]}
-    db)
+         :in [$ ?gid]
+         :where [[?e :artist/gid ?gid]]}
+    db
+    #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f")
 
   (d/q '[:find (pull ?e [* :foo/bar]) .
          :in $ ?e]

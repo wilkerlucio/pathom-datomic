@@ -28,11 +28,12 @@
 (defn db->schema
   "Extracts the schema from a Datomic db."
   [env db]
-  (->> (raw-datomic-q env '[:find [(pull ?e [*]) ...]
+  (->> (raw-datomic-q env '[:find (pull ?e [*])
               :where
               [_ :db.install/attribute ?e]
               [?e :db/ident ?ident]]
          db)
+       flatten
        (reduce
          (fn [schema entry]
            (assoc schema (:db/ident entry) entry))
@@ -169,19 +170,21 @@
 
       (integer? id)
       (post-process-entity env subquery
-        (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
-              :in '$ '?e]
-          db
-          id))
+        (ffirst
+          (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery))
+                :in '$ '?e]
+            db
+            id)))
 
       (p/ident? id)
       (let [[k v] id]
         (post-process-entity env subquery
-          (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery)) '.
-                :in '$ '?v
-                :where ['?e k '?v]]
-            db
-            v))))))
+          (ffirst
+            (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery))
+                  :in '$ '?v
+                  :where ['?e k '?v]]
+              db
+              v)))))))
 
 (defn entity-subquery
   "Using the current :query in the env, compute what part of it can be
@@ -221,8 +224,9 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (raw-datomic-q env (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery)) '...]])
-      db)))
+    (flatten
+     (raw-datomic-q env (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery))]])
+       db))))
 
 (defn query-entity
   "Like query-entities, but returns a single result. This leverage Datomic
@@ -230,8 +234,9 @@
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
     (post-process-entity env subquery
-      (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery)) '.])
-        db))))
+      (ffirst
+        (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery))])
+          db)))))
 
 (defn index-schema
   "Creates Pathom index from Datomic schema."

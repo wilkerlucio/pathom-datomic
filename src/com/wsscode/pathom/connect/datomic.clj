@@ -33,7 +33,7 @@
               [_ :db.install/attribute ?e]
               [?e :db/ident ?ident]]
          db)
-       flatten
+       (map first)
        (reduce
          (fn [schema entry]
            (assoc schema (:db/ident entry) entry))
@@ -224,7 +224,7 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (flatten
+    (map first
      (raw-datomic-q env (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery))]])
        db))))
 

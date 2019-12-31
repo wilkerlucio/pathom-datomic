@@ -245,7 +245,7 @@
   ::ident-attributes - a set containing the attributes to be treated as idents
   ::db - Datomic db, if not provided will be computed from ::conn
   "
-  [config]
+  [{::keys [conn] :as config}]
   (let [config'       (normalize-config config)
         datomic-index (index-schema config')]
     {::p/wrap-parser2
@@ -254,4 +254,7 @@
          (doseq [idx* idx-atoms]
            (swap! idx* pc/merge-indexes datomic-index))
          (fn [env tx]
-           (parser (merge env config') tx))))}))
+           (let [db       (raw-datomic-db config' conn)
+                 ; update datomic db on every parser call
+                 config'' (assoc config' ::db db)]
+             (parser (merge env config'') tx)))))}))

@@ -3,9 +3,9 @@
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.connect.datomic :as pcd]
             [com.wsscode.pathom.connect.datomic.on-prem :refer [on-prem-config]]
+            [com.wsscode.pathom.connect.planner :as pcp]
             [com.wsscode.pathom.core :as p]
             [datomic.api :as d]
-            [com.wsscode.pathom.connect.planner :as pcp]
             [edn-query-language.core :as eql]))
 
 (def uri "datomic:free://localhost:4334/mbrainz-1968-1973")
@@ -608,16 +608,6 @@
   (let [index (pcd/index-schema {::pcd/schema db-schema-output})]
     (is (= (::pc/index-oir index)
            index-schema-output))))
-
-(deftest test-ensure-minimum-subquery
-  (is (= (-> (p/query->ast [])
-             (pcd/ensure-minimum-subquery)
-             (p/ast->query))
-         [:db/id]))
-  (is (= (-> (p/query->ast [{:foo []}])
-             (pcd/ensure-minimum-subquery)
-             (p/ast->query))
-         [{:foo [:db/id]}])))
 
 (deftest test-post-process-entity
   (is (= (pcd/post-process-entity

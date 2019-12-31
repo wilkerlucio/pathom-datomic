@@ -4,7 +4,9 @@
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.sugar :as ps]
-            [edn-query-language.core :as eql]))
+            [edn-query-language.core :as eql]
+            [com.wsscode.pathom.connect.planner :as pcp]
+            [com.wsscode.pathom.connect.indexes :as pci]))
 
 (s/def ::db any?)
 (s/def ::schema (s/map-of ::p/attribute map?))
@@ -28,10 +30,11 @@
 (defn db->schema
   "Extracts the schema from a Datomic db."
   [env db]
-  (->> (raw-datomic-q env '[:find (pull ?e [*])
-              :where
-              [_ :db.install/attribute ?e]
-              [?e :db/ident ?ident]]
+  (->> (raw-datomic-q env '[:find (pull ?e [* {:db/valueType [:db/ident]}
+                                            {:db/cardinality [:db/ident]}])
+                            :where
+                            [_ :db.install/attribute ?e]
+                            [?e :db/ident ?ident]]
          db)
        (map first)
        (reduce
@@ -46,70 +49,6 @@
        vals
        (filter :db/unique)
        (into #{} (map :db/ident))))
-
-(defn project-dependencies
-  "Given a ::p/parent-query and ::schema-keys, compute all dependencies required to fulfil
-  the ::p/parent-query."
-  [{::keys    [schema-keys]
-    ::p/keys  [parent-query]
-    ::pc/keys [indexes sort-plan]
-    :as       env}]
-  (let [sort-plan   (or sort-plan pc/default-sort-plan)
-        [good bad] (pc/split-good-bad-keys (p/entity env))
-        non-datomic (keep
-                      (fn [{:keys [key]}]
-                        (if (contains? schema-keys key)
-                          nil
-                          key))
-                      (:children (eql/query->shallow-ast parent-query)))]
-    (into #{}
-          (mapcat (fn [key]
-                    (->> (pc/compute-paths*
-                           (::pc/index-oir indexes)
-                           good bad
-                           key
-                           #{key})
-                         (sort-plan env)
-                         first
-                         (map first))))
-          non-datomic)))
-
-(defn ensure-minimum-subquery
-  "Ensure the subquery has at least one element, this prevent empty sub-queries to be
-  sent to datomic."
-  [ast]
-  (update ast :children
-    (fn [items]
-      (if (seq items)
-        (mapv ensure-minimum-subquery items)
-        [{:type :property :key :db/id :dispatch-key :db/id}]))))
-
-(defn datomic-subquery
-  "Given a ::p/parent-query, projects dependencies and compute the part of the query
-  that Pathom delegates to Datomic to fulfil."
-  [{::p/keys [parent-query]
-    ::keys   [schema-keys]
-    :as      env}]
-  (let [ent         (p/entity env)
-        parent-keys (into #{} (map :key) (:children (eql/query->shallow-ast parent-query)))
-        deps        (project-dependencies env)
-        new-deps    (into []
-                          (comp (filter schema-keys)
-                                (map #(hash-map :key %)))
-                          (set/difference deps parent-keys))]
-    (->> parent-query
-         (p/lift-placeholders env)
-         p/query->ast
-         (p/transduce-children
-           (comp (filter (comp schema-keys :key))
-                 (map #(dissoc % :params))))
-         ensure-minimum-subquery
-         :children
-         (into new-deps (comp (remove #(contains? ent (:key %))) ; remove already known keys
-                              ; remove ident attributes
-                              (remove (comp vector? :key))))
-         (hash-map :type :root :children)
-         p/ast->query)))
 
 (defn- prop [k]
   {:type :prop :dispatch-key k :key k})
@@ -158,13 +97,16 @@
      ::ident-attributes ident-attributes}
     subquery))
 
+(defn node-subquery [{::pcp/keys [node]}]
+  (pci/io->query (::pcp/requires node)))
+
 (defn datomic-resolve
   "Runs the resolver to fetch Datomic data from identities."
   [{::keys [db]
     :as    config}
    env]
   (let [id       (pick-ident-key config (p/entity env))
-        subquery (datomic-subquery (merge env config))]
+        subquery (node-subquery env)]
     (cond
       (nil? id) nil
 
@@ -172,7 +114,7 @@
       (post-process-entity env subquery
         (ffirst
           (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery))
-                :in '$ '?e]
+                                 :in '$ '?e]
             db
             id)))
 
@@ -181,16 +123,23 @@
         (post-process-entity env subquery
           (ffirst
             (raw-datomic-q config [:find (list 'pull '?e (inject-ident-subqueries config subquery))
-                  :in '$ '?v
-                  :where ['?e k '?v]]
+                                   :in '$ '?v
+                                   :where ['?e k '?v]]
               db
               v)))))))
 
 (defn entity-subquery
   "Using the current :query in the env, compute what part of it can be
   delegated to Datomic."
-  [{:keys [query] :as env}]
-  (let [subquery (datomic-subquery (assoc env ::p/parent-query query ::p/entity {:db/id nil}))]
+  [{:keys [query] ::pc/keys [indexes] :as env}]
+  (let [graph        (pcp/compute-run-graph
+                       (assoc indexes
+                         :edn-query-language.ast/node
+                         (->> query eql/query->ast (pcp/prepare-ast env))
+
+                         ::pcp/available-data {:db/id {}}))
+        datomic-node (pcp/get-node graph (-> graph ::pcp/index-syms (get `datomic-resolver) first))
+        subquery     (node-subquery {::pcp/node datomic-node})]
     (cond-> subquery (not (seq subquery)) (conj :db/id))))
 
 (defn query-entities
@@ -225,8 +174,8 @@
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
     (map first
-     (raw-datomic-q env (assoc dquery :find [[(list 'pull '?e (inject-ident-subqueries env subquery))]])
-       db))))
+      (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery))])
+        db))))
 
 (defn query-entity
   "Like query-entities, but returns a single result. This leverage Datomic
@@ -238,18 +187,31 @@
         (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery))])
           db)))))
 
+(defn ref-attribute? [{::keys [schema]} attr]
+  (= :db.type/ref (get-in schema [attr :db/valueType :db/ident])))
+
+(defn schema-provides
+  [{::keys [schema-keys] :as config}]
+  (reduce
+    (fn [provides attr]
+      (assoc provides attr (if (ref-attribute? config attr)
+                             {:db/id {}}
+                             {})))
+    {}
+    schema-keys))
+
 (defn index-schema
   "Creates Pathom index from Datomic schema."
   [{::keys [schema] :as config}]
   (let [resolver  `datomic-resolver
         oir-paths {#{:db/id} #{resolver}}]
     {::pc/index-resolvers
-     {resolver {::pc/sym            resolver
-                ::pc/cache?         false
-                ::pc/compute-output (fn [env]
-                                      (datomic-subquery (merge env config)))
-                ::datomic?          true
-                ::pc/resolve        (fn [env _] (datomic-resolve config env))}}
+     {resolver {::datomic?             true
+                ::pc/sym               resolver
+                ::pc/cache?            false
+                ::pc/dynamic-resolver? true
+                ::pc/provides          (schema-provides config)
+                ::pc/resolve           (fn [env _] (datomic-resolve config env))}}
 
      ::pc/index-oir
      (->> (reduce

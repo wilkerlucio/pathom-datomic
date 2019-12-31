@@ -4,7 +4,9 @@
             [com.wsscode.pathom.connect.datomic :as pcd]
             [com.wsscode.pathom.connect.datomic.on-prem :refer [on-prem-config]]
             [com.wsscode.pathom.core :as p]
-            [datomic.api :as d]))
+            [datomic.api :as d]
+            [com.wsscode.pathom.connect.planner :as pcp]
+            [edn-query-language.core :as eql]))
 
 (def uri "datomic:free://localhost:4334/mbrainz-1968-1973")
 (def conn (d/connect uri))
@@ -12,564 +14,457 @@
 (def db (d/db conn))
 
 (def db-schema-output
-  {:release/script
-   {:db/id          97,
-    :db/ident       :release/script,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The script used in the release"},
-   :label/type
-   {:db/id          86,
-    :db/ident       :label/type,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Enum, one of :label.type/distributor, :label.type/holding,\n  :label.type/production, :label.type/originalProduction,\n  :label.type/bootlegProduction, :label.type/reissueProduction, or\n  :label.type/publisher."},
-   :artist/sortName
-   {:db/id          68,
-    :db/ident       :artist/sortName,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc
-                    "The artist's name for use in alphabetical sorting, e.g. Beatles, The"},
-   :abstractRelease/artists
-   {:db/id          81,
-    :db/ident       :abstractRelease/artists,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc         "The set of artists contributing to the abstract release"},
-   :db/excise
-   {:db/id          15,
-    :db/ident       :db/excise,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35}},
-   :release/packaging
-   {:db/id          102,
-    :db/ident       :release/packaging,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "The type of packaging used in the release, an enum, one\n  of: :release.packaging/jewelCase, :release.packaging/slimJewelCase, :release.packaging/digipak, :release.packaging/other\n  , :release.packaging/keepCase, :release.packaging/none,\n  or :release.packaging/cardboardPaperSleeve"},
-   :abstractRelease/type
-   {:db/id          80,
-    :db/ident       :abstractRelease/type,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Enum, one\n  of: :release.type/album, :release.type/single, :release.type/ep, :release.type/audiobook,\n  or :release.type/other"},
-   :release/name
-   {:db/id          100,
-    :db/ident       :release/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/fulltext    true,
-    :db/doc         "The name of the release"},
-   :db/fn
-   {:db/id          52,
-    :db/ident       :db/fn,
-    :db/valueType   {:db/id 26},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "A function-valued attribute for direct use by transactions and queries."},
-   :release/artists
-   {:db/id          107,
-    :db/ident       :release/artists,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc         "The set of artists contributing to the release"},
-   :artist/name
-   {:db/id          67,
-    :db/ident       :artist/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/fulltext    true,
-    :db/doc         "The artist's name"},
-   :db/index
-   {:db/id          44,
-    :db/ident       :db/index,
-    :db/valueType   {:db/id 24},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of an attribute. If true, create an AVET index for the attribute. Defaults to false."},
-   :label/endYear
-   {:db/id          91,
-    :db/ident       :label/endYear,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The year the label stopped business"},
-   :medium/position
-   {:db/id          112,
-    :db/ident       :medium/position,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "The position of this medium in the release relative to the other media, i.e. disc 1"},
-   :artist/type
-   {:db/id          69,
-    :db/ident       :artist/type,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Enum, one of :artist.type/person, :artist.type/other, :artist.type/group."},
-   :db/unique
-   {:db/id          42,
-    :db/ident       :db/unique,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of an attribute. If value is :db.unique/value, then attribute value is unique to each entity. Attempts to insert a duplicate value for a temporary entity id will fail. If value is :db.unique/identity, then attribute value is unique, and upsert is enabled. Attempting to insert a duplicate value for a temporary entity id will cause all attributes associated with that temporary id to be merged with the entity already in the database. Defaults to nil."},
-   :abstractRelease/name
-   {:db/id          79,
-    :db/ident       :abstractRelease/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc         "The name of the abstract release"},
-   :label/startMonth
-   {:db/id          89,
-    :db/ident       :label/startMonth,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The month the label started business"},
-   :db.excise/beforeT
-   {:db/id          17,
-    :db/ident       :db.excise/beforeT,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35}},
-   :script/name
-   {:db/id          65,
-    :db/ident       :script/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 37},
-    :db/doc
-                    "Name of written character set, e.g. Hebrew, Latin, Cyrillic"},
-   :abstractRelease/gid
-   {:db/id          78,
-    :db/ident       :abstractRelease/gid,
-    :db/valueType   {:db/id 56},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 38},
-    :db/doc
-                    "The globally unique MusicBrainz ID for the abstract release"},
-   :track/name
-   {:db/id          118,
-    :db/ident       :track/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/fulltext    true,
-    :db/doc         "The track name"},
-   :track/artists
-   {:db/id          115,
-    :db/ident       :track/artists,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc         "The artists who contributed to the track"},
-   :release/country
-   {:db/id          95,
-    :db/ident       :release/country,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The country where the recording was released"},
-   :artist/country
-   {:db/id          71,
-    :db/ident       :artist/country,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The artist's country of origin"},
-   :artist/gid
-   {:db/id          66,
-    :db/ident       :artist/gid,
-    :db/valueType   {:db/id 56},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 38},
-    :db/doc         "The globally unique MusicBrainz ID for an artist"},
-   :db.sys/reId
-   {:db/id          9,
-    :db/ident       :db.sys/reId,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "System-assigned attribute for an id e in the log that has been changed to id v in the index"},
-   :db/valueType
-   {:db/id          40,
-    :db/ident       :db/valueType,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of an attribute that specifies the attribute's value type. Built-in value types include, :db.type/keyword, :db.type/string, :db.type/ref, :db.type/instant, :db.type/long, :db.type/bigdec, :db.type/boolean, :db.type/float, :db.type/uuid, :db.type/double, :db.type/bigint,  :db.type/uri."},
-   :artist/startDay
-   {:db/id          74,
-    :db/ident       :artist/startDay,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The day the artist started actively recording"},
-   :release/gid
-   {:db/id          94,
-    :db/ident       :release/gid,
-    :db/valueType   {:db/id 56},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 38},
-    :db/doc         "The globally unique MusicBrainz ID for the release"},
-   :artist/endDay
-   {:db/id          77,
-    :db/ident       :artist/endDay,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The day the artist stopped actively recording"},
-   :label/country
-   {:db/id          87,
-    :db/ident       :label/country,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The country where the record label is located"},
-   :db/txInstant
-   {:db/id          50,
-    :db/ident       :db/txInstant,
-    :db/valueType   {:db/id 25},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc
-                    "Attribute whose value is a :db.type/instant. A :db/txInstant is recorded automatically with every transaction."},
-   :artist/startYear
-   {:db/id          72,
-    :db/ident       :artist/startYear,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc         "The year the artist started actively recording"},
-   :release/labels
-   {:db/id          96,
-    :db/ident       :release/labels,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc         "The label on which the recording was released"},
-   :artist/endMonth
-   {:db/id          76,
-    :db/ident       :artist/endMonth,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The month the artist stopped actively recording"},
-   :release/language
-   {:db/id          98,
-    :db/ident       :release/language,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The language used in the release"},
-   :medium/format
-   {:db/id          111,
-    :db/ident       :medium/format,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "The format of the medium. An enum with lots of possible values"},
-   :release/day
-   {:db/id          105,
-    :db/ident       :release/day,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The day of the release"},
-   :db/noHistory
-   {:db/id          45,
-    :db/ident       :db/noHistory,
-    :db/valueType   {:db/id 24},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of an attribute. If true, past values of the attribute are not retained after indexing. Defaults to false."},
-   :release/status
-   {:db/id          109,
-    :db/ident       :release/status,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc         "The status of the release"},
-   :label/sortName
-   {:db/id          85,
-    :db/ident       :label/sortName,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc
-                    "The name of the record label for use in alphabetical sorting"},
-   :db/isComponent
-   {:db/id          43,
-    :db/ident       :db/isComponent,
-    :db/valueType   {:db/id 24},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of attribute whose vtype is :db.type/ref. If true, then the attribute is a component of the entity referencing it. When you query for an entire entity, components are fetched automatically. Defaults to nil."},
-   :db/lang
-   {:db/id          46,
-    :db/ident       :db/lang,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Attribute of a data function. Value is a keyword naming the implementation language of the function. Legal values are :db.lang/java and :db.lang/clojure"},
-   :db/fulltext
-   {:db/id          51,
-    :db/ident       :db/fulltext,
-    :db/valueType   {:db/id 24},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of an attribute. If true, create a fulltext search index for the attribute. Defaults to false."},
-   :language/name
-   {:db/id          64,
-    :db/ident       :language/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 37},
-    :db/doc         "The name of the written and spoken language"},
-   :artist/endYear
-   {:db/id          75,
-    :db/ident       :artist/endYear,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The year the artist stopped actively recording"},
-   :release/month
-   {:db/id          104,
-    :db/ident       :release/month,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The month of the release"},
-   :release/artistCredit
-   {:db/id          106,
-    :db/ident       :release/artistCredit,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/fulltext    true,
-    :db/doc
-                    "The string represenation of the artist(s) to be credited on the release"},
-   :label/gid
-   {:db/id          83,
-    :db/ident       :label/gid,
-    :db/valueType   {:db/id 56},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 38},
-    :db/doc         "The globally unique MusicBrainz ID for the record label"},
-   :country/name
-   {:db/id          63,
-    :db/ident       :country/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 37},
-    :db/doc         "The name of the country"},
-   :medium/name
-   {:db/id          113,
-    :db/ident       :medium/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/fulltext    true,
-    :db/doc
-                    "The name of the medium itself, distinct from the name of the release"},
-   :abstractRelease/artistCredit
-   {:db/id          82,
-    :db/ident       :abstractRelease/artistCredit,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/fulltext    true,
-    :db/doc
-                    "The string represenation of the artist(s) to be credited on the abstract release"},
-   :release/abstractRelease
-   {:db/id          108,
-    :db/ident       :release/abstractRelease,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "This release is the physical manifestation of the\n  associated abstract release, e.g. the the 1984 US vinyl release of\n  \"The Wall\" by Columbia, as opposed to the 2000 US CD release of\n  \"The Wall\" by Capitol Records."},
-   :label/startDay
-   {:db/id          90,
-    :db/ident       :label/startDay,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The day the label started business"},
-   :db/cardinality
-   {:db/id          41,
-    :db/ident       :db/cardinality,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Property of an attribute. Two possible values: :db.cardinality/one for single-valued attributes, and :db.cardinality/many for many-valued attributes. Defaults to :db.cardinality/one."},
-   :db/doc
-   {:db/id          62,
-    :db/ident       :db/doc,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/fulltext    true,
-    :db/doc         "Documentation string for an entity."},
-   :db.excise/before
-   {:db/id          18,
-    :db/ident       :db.excise/before,
-    :db/valueType   {:db/id 25},
-    :db/cardinality {:db/id 35}},
-   :artist/startMonth
-   {:db/id          73,
-    :db/ident       :artist/startMonth,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The month the artist started actively recording"},
-   :track/duration
-   {:db/id          119,
-    :db/ident       :track/duration,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc         "The duration of the track in msecs"},
-   :db/ident
-   {:db/id          10,
-    :db/ident       :db/ident,
-    :db/valueType   {:db/id 21},
-    :db/cardinality {:db/id 35},
-    :db/unique      {:db/id 38},
-    :db/doc         "Attribute used to uniquely name an entity."},
-   :db/code
-   {:db/id          47,
-    :db/ident       :db/code,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/fulltext    true,
-    :db/doc
-                    "String-valued attribute of a data function that contains the function's source code."},
-   :artist/gender
-   {:db/id          70,
-    :db/ident       :artist/gender,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "Enum, one of :artist.gender/male, :artist.gender/female, or :artist.gender/other."},
-   :track/position
-   {:db/id          117,
-    :db/ident       :track/position,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "The position of the track relative to the other tracks on the medium"},
-   :medium/trackCount
-   {:db/id          114,
-    :db/ident       :medium/trackCount,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The total number of tracks on the medium"},
-   :release/year
-   {:db/id          103,
-    :db/ident       :release/year,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc         "The year of the release"},
-   :db.install/valueType
-   {:db/id          12,
-    :db/ident       :db.install/valueType,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc
-                    "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as a value type."},
-   :label/endMonth
-   {:db/id          92,
-    :db/ident       :label/endMonth,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The month the label stopped business"},
-   :db.alter/attribute
-   {:db/id          19,
-    :db/ident       :db.alter/attribute,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc
-                    "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will alter the definition of existing attribute v."},
-   :db.install/function
-   {:db/id          14,
-    :db/ident       :db.install/function,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc
-                    "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as a data function."},
-   :release/media
-   {:db/id          101,
-    :db/ident       :release/media,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/isComponent true,
-    :db/doc
-                    "The various media (CDs, vinyl records, cassette tapes, etc.) included in the release."},
-   :label/endDay
-   {:db/id          93,
-    :db/ident       :label/endDay,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The day the label stopped business"},
-   :db.install/partition
-   {:db/id          11,
-    :db/ident       :db.install/partition,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc
-                    "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as a partition."},
-   :label/startYear
-   {:db/id          88,
-    :db/ident       :label/startYear,
-    :db/valueType   {:db/id 22},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc         "The year the label started business"},
-   :label/name
-   {:db/id          84,
-    :db/ident       :label/name,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/fulltext    true,
-    :db/doc         "The name of the record label"},
-   :db.install/attribute
-   {:db/id          13,
-    :db/ident       :db.install/attribute,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/doc
-                    "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as an attribute."},
-   :db.excise/attrs
-   {:db/id          16,
-    :db/ident       :db.excise/attrs,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36}},
-   :medium/tracks
-   {:db/id          110,
-    :db/ident       :medium/tracks,
-    :db/valueType   {:db/id 20},
-    :db/cardinality {:db/id 36},
-    :db/isComponent true,
-    :db/doc         "The set of tracks found on this medium"},
-   :fressian/tag
-   {:db/id          39,
-    :db/ident       :fressian/tag,
-    :db/valueType   {:db/id 21},
-    :db/cardinality {:db/id 35},
-    :db/index       true,
-    :db/doc
-                    "Keyword-valued attribute of a value type that specifies the underlying fressian type used for serialization."},
-   :release/barcode
-   {:db/id          99,
-    :db/ident       :release/barcode,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/doc         "The barcode on the release packaging"},
-   :db.sys/partiallyIndexed
-   {:db/id          8,
-    :db/ident       :db.sys/partiallyIndexed,
-    :db/valueType   {:db/id 24},
-    :db/cardinality {:db/id 35},
-    :db/doc
-                    "System-assigned attribute set to true for transactions not fully incorporated into the index"},
-   :track/artistCredit
-   {:db/id          116,
-    :db/ident       :track/artistCredit,
-    :db/valueType   {:db/id 23},
-    :db/cardinality {:db/id 35},
-    :db/fulltext    true,
-    :db/doc         "The artists who contributed to the track"}})
+  {:abstractRelease/artistCredit #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The string represenation of the artist(s) to be credited on the abstract release"
+                                      :fulltext    true
+                                      :id          82
+                                      :ident       :abstractRelease/artistCredit
+                                      :valueType   #:db{:ident :db.type/string}}
+   :abstractRelease/artists      #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "The set of artists contributing to the abstract release"
+                                      :id          81
+                                      :ident       :abstractRelease/artists
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :abstractRelease/gid          #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The globally unique MusicBrainz ID for the abstract release"
+                                      :id          78
+                                      :ident       :abstractRelease/gid
+                                      :unique      #:db{:id 38}
+                                      :valueType   #:db{:ident :db.type/uuid}}
+   :abstractRelease/name         #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the abstract release"
+                                      :id          79
+                                      :ident       :abstractRelease/name
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :abstractRelease/type         #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Enum, one
+  of: :release.type/album, :release.type/single, :release.type/ep, :release.type/audiobook,
+  or :release.type/other"
+                                      :id          80
+                                      :ident       :abstractRelease/type
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :artist/country               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The artist's country of origin"
+                                      :id          71
+                                      :ident       :artist/country
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :artist/endDay                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The day the artist stopped actively recording"
+                                      :id          77
+                                      :ident       :artist/endDay
+                                      :valueType   #:db{:ident :db.type/long}}
+   :artist/endMonth              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The month the artist stopped actively recording"
+                                      :id          76
+                                      :ident       :artist/endMonth
+                                      :valueType   #:db{:ident :db.type/long}}
+   :artist/endYear               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The year the artist stopped actively recording"
+                                      :id          75
+                                      :ident       :artist/endYear
+                                      :valueType   #:db{:ident :db.type/long}}
+   :artist/gender                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Enum, one of :artist.gender/male, :artist.gender/female, or :artist.gender/other."
+                                      :id          70
+                                      :ident       :artist/gender
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :artist/gid                   #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The globally unique MusicBrainz ID for an artist"
+                                      :id          66
+                                      :ident       :artist/gid
+                                      :unique      #:db{:id 38}
+                                      :valueType   #:db{:ident :db.type/uuid}}
+   :artist/name                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The artist's name"
+                                      :fulltext    true
+                                      :id          67
+                                      :ident       :artist/name
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :artist/sortName              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The artist's name for use in alphabetical sorting, e.g. Beatles, The"
+                                      :id          68
+                                      :ident       :artist/sortName
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :artist/startDay              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The day the artist started actively recording"
+                                      :id          74
+                                      :ident       :artist/startDay
+                                      :valueType   #:db{:ident :db.type/long}}
+   :artist/startMonth            #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The month the artist started actively recording"
+                                      :id          73
+                                      :ident       :artist/startMonth
+                                      :valueType   #:db{:ident :db.type/long}}
+   :artist/startYear             #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The year the artist started actively recording"
+                                      :id          72
+                                      :ident       :artist/startYear
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/long}}
+   :artist/type                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Enum, one of :artist.type/person, :artist.type/other, :artist.type/group."
+                                      :id          69
+                                      :ident       :artist/type
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :country/name                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the country"
+                                      :id          63
+                                      :ident       :country/name
+                                      :unique      #:db{:id 37}
+                                      :valueType   #:db{:ident :db.type/string}}
+   :db.alter/attribute           #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will alter the definition of existing attribute v."
+                                      :id          19
+                                      :ident       :db.alter/attribute
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db.excise/attrs              #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :id          16
+                                      :ident       :db.excise/attrs
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db.excise/before             #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :id          18
+                                      :ident       :db.excise/before
+                                      :valueType   #:db{:ident :db.type/instant}}
+   :db.excise/beforeT            #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :id          17
+                                      :ident       :db.excise/beforeT
+                                      :valueType   #:db{:ident :db.type/long}}
+   :db.install/attribute         #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as an attribute."
+                                      :id          13
+                                      :ident       :db.install/attribute
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db.install/function          #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as a data function."
+                                      :id          14
+                                      :ident       :db.install/function
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db.install/partition         #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as a partition."
+                                      :id          11
+                                      :ident       :db.install/partition
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db.install/valueType         #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "System attribute with type :db.type/ref. Asserting this attribute on :db.part/db with value v will install v as a value type."
+                                      :id          12
+                                      :ident       :db.install/valueType
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db.sys/partiallyIndexed      #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "System-assigned attribute set to true for transactions not fully incorporated into the index"
+                                      :id          8
+                                      :ident       :db.sys/partiallyIndexed
+                                      :valueType   #:db{:ident :db.type/boolean}}
+   :db.sys/reId                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "System-assigned attribute for an id e in the log that has been changed to id v in the index"
+                                      :id          9
+                                      :ident       :db.sys/reId
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db/cardinality               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of an attribute. Two possible values: :db.cardinality/one for single-valued attributes, and :db.cardinality/many for many-valued attributes. Defaults to :db.cardinality/one."
+                                      :id          41
+                                      :ident       :db/cardinality
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db/code                      #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "String-valued attribute of a data function that contains the function's source code."
+                                      :fulltext    true
+                                      :id          47
+                                      :ident       :db/code
+                                      :valueType   #:db{:ident :db.type/string}}
+   :db/doc                       #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Documentation string for an entity."
+                                      :fulltext    true
+                                      :id          62
+                                      :ident       :db/doc
+                                      :valueType   #:db{:ident :db.type/string}}
+   :db/excise                    #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :id          15
+                                      :ident       :db/excise
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db/fn                        #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "A function-valued attribute for direct use by transactions and queries."
+                                      :id          52
+                                      :ident       :db/fn
+                                      :valueType   #:db{:ident :db.type/fn}}
+   :db/fulltext                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of an attribute. If true, create a fulltext search index for the attribute. Defaults to false."
+                                      :id          51
+                                      :ident       :db/fulltext
+                                      :valueType   #:db{:ident :db.type/boolean}}
+   :db/ident                     #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Attribute used to uniquely name an entity."
+                                      :id          10
+                                      :ident       :db/ident
+                                      :unique      #:db{:id 38}
+                                      :valueType   #:db{:ident :db.type/keyword}}
+   :db/index                     #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of an attribute. If true, create an AVET index for the attribute. Defaults to false."
+                                      :id          44
+                                      :ident       :db/index
+                                      :valueType   #:db{:ident :db.type/boolean}}
+   :db/isComponent               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of attribute whose vtype is :db.type/ref. If true, then the attribute is a component of the entity referencing it. When you query for an entire entity, components are fetched automatically. Defaults to nil."
+                                      :id          43
+                                      :ident       :db/isComponent
+                                      :valueType   #:db{:ident :db.type/boolean}}
+   :db/lang                      #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Attribute of a data function. Value is a keyword naming the implementation language of the function. Legal values are :db.lang/java and :db.lang/clojure"
+                                      :id          46
+                                      :ident       :db/lang
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db/noHistory                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of an attribute. If true, past values of the attribute are not retained after indexing. Defaults to false."
+                                      :id          45
+                                      :ident       :db/noHistory
+                                      :valueType   #:db{:ident :db.type/boolean}}
+   :db/txInstant                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Attribute whose value is a :db.type/instant. A :db/txInstant is recorded automatically with every transaction."
+                                      :id          50
+                                      :ident       :db/txInstant
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/instant}}
+   :db/unique                    #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of an attribute. If value is :db.unique/value, then attribute value is unique to each entity. Attempts to insert a duplicate value for a temporary entity id will fail. If value is :db.unique/identity, then attribute value is unique, and upsert is enabled. Attempting to insert a duplicate value for a temporary entity id will cause all attributes associated with that temporary id to be merged with the entity already in the database. Defaults to nil."
+                                      :id          42
+                                      :ident       :db/unique
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :db/valueType                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Property of an attribute that specifies the attribute's value type. Built-in value types include, :db.type/keyword, :db.type/string, :db.type/ref, :db.type/instant, :db.type/long, :db.type/bigdec, :db.type/boolean, :db.type/float, :db.type/uuid, :db.type/double, :db.type/bigint,  :db.type/uri."
+                                      :id          40
+                                      :ident       :db/valueType
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :fressian/tag                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Keyword-valued attribute of a value type that specifies the underlying fressian type used for serialization."
+                                      :id          39
+                                      :ident       :fressian/tag
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/keyword}}
+   :label/country                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The country where the record label is located"
+                                      :id          87
+                                      :ident       :label/country
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :label/endDay                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The day the label stopped business"
+                                      :id          93
+                                      :ident       :label/endDay
+                                      :valueType   #:db{:ident :db.type/long}}
+   :label/endMonth               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The month the label stopped business"
+                                      :id          92
+                                      :ident       :label/endMonth
+                                      :valueType   #:db{:ident :db.type/long}}
+   :label/endYear                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The year the label stopped business"
+                                      :id          91
+                                      :ident       :label/endYear
+                                      :valueType   #:db{:ident :db.type/long}}
+   :label/gid                    #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The globally unique MusicBrainz ID for the record label"
+                                      :id          83
+                                      :ident       :label/gid
+                                      :unique      #:db{:id 38}
+                                      :valueType   #:db{:ident :db.type/uuid}}
+   :label/name                   #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the record label"
+                                      :fulltext    true
+                                      :id          84
+                                      :ident       :label/name
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :label/sortName               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the record label for use in alphabetical sorting"
+                                      :id          85
+                                      :ident       :label/sortName
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :label/startDay               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The day the label started business"
+                                      :id          90
+                                      :ident       :label/startDay
+                                      :valueType   #:db{:ident :db.type/long}}
+   :label/startMonth             #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The month the label started business"
+                                      :id          89
+                                      :ident       :label/startMonth
+                                      :valueType   #:db{:ident :db.type/long}}
+   :label/startYear              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The year the label started business"
+                                      :id          88
+                                      :ident       :label/startYear
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/long}}
+   :label/type                   #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Enum, one of :label.type/distributor, :label.type/holding,
+  :label.type/production, :label.type/originalProduction,
+  :label.type/bootlegProduction, :label.type/reissueProduction, or
+  :label.type/publisher."
+                                      :id          86
+                                      :ident       :label/type
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :language/name                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the written and spoken language"
+                                      :id          64
+                                      :ident       :language/name
+                                      :unique      #:db{:id 37}
+                                      :valueType   #:db{:ident :db.type/string}}
+   :medium/format                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The format of the medium. An enum with lots of possible values"
+                                      :id          111
+                                      :ident       :medium/format
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :medium/name                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the medium itself, distinct from the name of the release"
+                                      :fulltext    true
+                                      :id          113
+                                      :ident       :medium/name
+                                      :valueType   #:db{:ident :db.type/string}}
+   :medium/position              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The position of this medium in the release relative to the other media, i.e. disc 1"
+                                      :id          112
+                                      :ident       :medium/position
+                                      :valueType   #:db{:ident :db.type/long}}
+   :medium/trackCount            #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The total number of tracks on the medium"
+                                      :id          114
+                                      :ident       :medium/trackCount
+                                      :valueType   #:db{:ident :db.type/long}}
+   :medium/tracks                #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "The set of tracks found on this medium"
+                                      :id          110
+                                      :ident       :medium/tracks
+                                      :isComponent true
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/abstractRelease      #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "This release is the physical manifestation of the
+  associated abstract release, e.g. the the 1984 US vinyl release of
+  \"The Wall\" by Columbia, as opposed to the 2000 US CD release of
+  \"The Wall\" by Capitol Records."
+                                      :id          108
+                                      :ident       :release/abstractRelease
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/artistCredit         #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The string represenation of the artist(s) to be credited on the release"
+                                      :fulltext    true
+                                      :id          106
+                                      :ident       :release/artistCredit
+                                      :valueType   #:db{:ident :db.type/string}}
+   :release/artists              #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "The set of artists contributing to the release"
+                                      :id          107
+                                      :ident       :release/artists
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/barcode              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The barcode on the release packaging"
+                                      :id          99
+                                      :ident       :release/barcode
+                                      :valueType   #:db{:ident :db.type/string}}
+   :release/country              #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The country where the recording was released"
+                                      :id          95
+                                      :ident       :release/country
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/day                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The day of the release"
+                                      :id          105
+                                      :ident       :release/day
+                                      :valueType   #:db{:ident :db.type/long}}
+   :release/gid                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The globally unique MusicBrainz ID for the release"
+                                      :id          94
+                                      :ident       :release/gid
+                                      :unique      #:db{:id 38}
+                                      :valueType   #:db{:ident :db.type/uuid}}
+   :release/labels               #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "The label on which the recording was released"
+                                      :id          96
+                                      :ident       :release/labels
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/language             #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The language used in the release"
+                                      :id          98
+                                      :ident       :release/language
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/media                #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "The various media (CDs, vinyl records, cassette tapes, etc.) included in the release."
+                                      :id          101
+                                      :ident       :release/media
+                                      :isComponent true
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/month                #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The month of the release"
+                                      :id          104
+                                      :ident       :release/month
+                                      :valueType   #:db{:ident :db.type/long}}
+   :release/name                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The name of the release"
+                                      :fulltext    true
+                                      :id          100
+                                      :ident       :release/name
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :release/packaging            #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The type of packaging used in the release, an enum, one
+  of: :release.packaging/jewelCase, :release.packaging/slimJewelCase, :release.packaging/digipak, :release.packaging/other
+  , :release.packaging/keepCase, :release.packaging/none,
+  or :release.packaging/cardboardPaperSleeve"
+                                      :id          102
+                                      :ident       :release/packaging
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/script               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The script used in the release"
+                                      :id          97
+                                      :ident       :release/script
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :release/status               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The status of the release"
+                                      :id          109
+                                      :ident       :release/status
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :release/year                 #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The year of the release"
+                                      :id          103
+                                      :ident       :release/year
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/long}}
+   :script/name                  #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "Name of written character set, e.g. Hebrew, Latin, Cyrillic"
+                                      :id          65
+                                      :ident       :script/name
+                                      :unique      #:db{:id 37}
+                                      :valueType   #:db{:ident :db.type/string}}
+   :track/artistCredit           #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The artists who contributed to the track"
+                                      :fulltext    true
+                                      :id          116
+                                      :ident       :track/artistCredit
+                                      :valueType   #:db{:ident :db.type/string}}
+   :track/artists                #:db{:cardinality #:db{:ident :db.cardinality/many}
+                                      :doc         "The artists who contributed to the track"
+                                      :id          115
+                                      :ident       :track/artists
+                                      :valueType   #:db{:ident :db.type/ref}}
+   :track/duration               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The duration of the track in msecs"
+                                      :id          119
+                                      :ident       :track/duration
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/long}}
+   :track/name                   #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The track name"
+                                      :fulltext    true
+                                      :id          118
+                                      :ident       :track/name
+                                      :index       true
+                                      :valueType   #:db{:ident :db.type/string}}
+   :track/position               #:db{:cardinality #:db{:ident :db.cardinality/one}
+                                      :doc         "The position of the track relative to the other tracks on the medium"
+                                      :id          117
+                                      :ident       :track/position
+                                      :valueType   #:db{:ident :db.type/long}}})
 
 (deftest test-db->schema
   (is (= (pcd/db->schema on-prem-config db)
@@ -585,22 +480,6 @@
            :language/name
            :release/gid
            :script/name})))
-
-(deftest test-datomic-subquery
-  (testing "basic sub query computing"
-    (is (= (pcd/datomic-subquery {::p/parent-query  [:foo :bar :baz]
-                                  ::pcd/schema-keys #{:foo :baz}})
-           [:foo :baz])))
-
-  (testing "halt on missing joins"
-    (is (= (pcd/datomic-subquery {::p/parent-query  [:foo {:bar [:baz]}]
-                                  ::pcd/schema-keys #{:foo :baz}})
-           [:foo])))
-
-  (testing "ensure minimal sub query"
-    (is (= (pcd/datomic-subquery {::p/parent-query  [:foo {:baz [:bar]}]
-                                  ::pcd/schema-keys #{:foo :baz}})
-           [:foo {:baz [:db/id]}]))))
 
 (deftest test-inject-ident-subqueries
   (testing "add ident sub query part on ident fields"
@@ -634,95 +513,95 @@
              123)))))
 
 (def index-schema-output
-  `{:release/script               {#{:db/id} #{pcd/datomic-resolver}},
-    :label/type                   {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/sortName              {#{:db/id} #{pcd/datomic-resolver}},
-    :abstractRelease/artists      {#{:db/id} #{pcd/datomic-resolver}},
-    :db/excise                    {#{:db/id} #{pcd/datomic-resolver}},
-    :release/packaging            {#{:db/id} #{pcd/datomic-resolver}},
-    :abstractRelease/type         {#{:db/id} #{pcd/datomic-resolver}},
-    :release/name                 {#{:db/id} #{pcd/datomic-resolver}},
-    :db/fn                        {#{:db/id} #{pcd/datomic-resolver}},
-    :release/artists              {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/name                  {#{:db/id} #{pcd/datomic-resolver}},
-    :db/index                     {#{:db/id} #{pcd/datomic-resolver}},
-    :label/endYear                {#{:db/id} #{pcd/datomic-resolver}},
-    :medium/position              {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/type                  {#{:db/id} #{pcd/datomic-resolver}},
-    :db/unique                    {#{:db/id} #{pcd/datomic-resolver}},
-    :abstractRelease/name         {#{:db/id} #{pcd/datomic-resolver}},
-    :label/startMonth             {#{:db/id} #{pcd/datomic-resolver}},
-    :db.excise/beforeT            {#{:db/id} #{pcd/datomic-resolver}},
-    :script/name                  {#{:db/id} #{pcd/datomic-resolver}},
-    :abstractRelease/gid          {#{:db/id} #{pcd/datomic-resolver}},
-    :track/name                   {#{:db/id} #{pcd/datomic-resolver}},
-    :track/artists                {#{:db/id} #{pcd/datomic-resolver}},
-    :release/country              {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/country               {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/gid                   {#{:db/id} #{pcd/datomic-resolver}},
-    :db.sys/reId                  {#{:db/id} #{pcd/datomic-resolver}},
-    :db/valueType                 {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/startDay              {#{:db/id} #{pcd/datomic-resolver}},
-    :release/gid                  {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/endDay                {#{:db/id} #{pcd/datomic-resolver}},
-    :label/country                {#{:db/id} #{pcd/datomic-resolver}},
-    :db/txInstant                 {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/startYear             {#{:db/id} #{pcd/datomic-resolver}},
-    :release/labels               {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/endMonth              {#{:db/id} #{pcd/datomic-resolver}},
-    :release/language             {#{:db/id} #{pcd/datomic-resolver}},
-    :medium/format                {#{:db/id} #{pcd/datomic-resolver}},
-    :release/day                  {#{:db/id} #{pcd/datomic-resolver}},
-    :db/noHistory                 {#{:db/id} #{pcd/datomic-resolver}},
-    :release/status               {#{:db/id} #{pcd/datomic-resolver}},
-    :label/sortName               {#{:db/id} #{pcd/datomic-resolver}},
-    :db/isComponent               {#{:db/id} #{pcd/datomic-resolver}},
-    :db/lang                      {#{:db/id} #{pcd/datomic-resolver}},
-    :db/fulltext                  {#{:db/id} #{pcd/datomic-resolver}},
-    :language/name                {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/endYear               {#{:db/id} #{pcd/datomic-resolver}},
-    :release/month                {#{:db/id} #{pcd/datomic-resolver}},
-    :release/artistCredit         {#{:db/id} #{pcd/datomic-resolver}},
-    :label/gid                    {#{:db/id} #{pcd/datomic-resolver}},
-    :country/name                 {#{:db/id} #{pcd/datomic-resolver}},
-    :medium/name                  {#{:db/id} #{pcd/datomic-resolver}},
-    :abstractRelease/artistCredit {#{:db/id} #{pcd/datomic-resolver}},
-    :release/abstractRelease      {#{:db/id} #{pcd/datomic-resolver}},
-    :label/startDay               {#{:db/id} #{pcd/datomic-resolver}},
-    :db/cardinality               {#{:db/id} #{pcd/datomic-resolver}},
-    :db/doc                       {#{:db/id} #{pcd/datomic-resolver}},
-    :db/id                        {#{:script/name}         #{pcd/datomic-resolver},
-                                   #{:abstractRelease/gid} #{pcd/datomic-resolver},
-                                   #{:artist/gid}          #{pcd/datomic-resolver},
-                                   #{:release/gid}         #{pcd/datomic-resolver},
-                                   #{:language/name}       #{pcd/datomic-resolver},
-                                   #{:label/gid}           #{pcd/datomic-resolver},
-                                   #{:country/name}        #{pcd/datomic-resolver},
-                                   #{:db/ident}            #{pcd/datomic-resolver}},
-    :db.excise/before             {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/startMonth            {#{:db/id} #{pcd/datomic-resolver}},
-    :track/duration               {#{:db/id} #{pcd/datomic-resolver}},
-    :db/ident                     {#{:db/id} #{pcd/datomic-resolver}},
-    :db/code                      {#{:db/id} #{pcd/datomic-resolver}},
-    :artist/gender                {#{:db/id} #{pcd/datomic-resolver}},
-    :track/position               {#{:db/id} #{pcd/datomic-resolver}},
-    :medium/trackCount            {#{:db/id} #{pcd/datomic-resolver}},
-    :release/year                 {#{:db/id} #{pcd/datomic-resolver}},
-    :db.install/valueType         {#{:db/id} #{pcd/datomic-resolver}},
-    :label/endMonth               {#{:db/id} #{pcd/datomic-resolver}},
-    :db.alter/attribute           {#{:db/id} #{pcd/datomic-resolver}},
-    :db.install/function          {#{:db/id} #{pcd/datomic-resolver}},
-    :release/media                {#{:db/id} #{pcd/datomic-resolver}},
-    :label/endDay                 {#{:db/id} #{pcd/datomic-resolver}},
-    :db.install/partition         {#{:db/id} #{pcd/datomic-resolver}},
-    :label/startYear              {#{:db/id} #{pcd/datomic-resolver}},
-    :label/name                   {#{:db/id} #{pcd/datomic-resolver}},
-    :db.install/attribute         {#{:db/id} #{pcd/datomic-resolver}},
-    :db.excise/attrs              {#{:db/id} #{pcd/datomic-resolver}},
-    :medium/tracks                {#{:db/id} #{pcd/datomic-resolver}},
-    :fressian/tag                 {#{:db/id} #{pcd/datomic-resolver}},
-    :release/barcode              {#{:db/id} #{pcd/datomic-resolver}},
-    :db.sys/partiallyIndexed      {#{:db/id} #{pcd/datomic-resolver}},
+  `{:release/script               {#{:db/id} #{pcd/datomic-resolver}}
+    :label/type                   {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/sortName              {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/artists      {#{:db/id} #{pcd/datomic-resolver}}
+    :db/excise                    {#{:db/id} #{pcd/datomic-resolver}}
+    :release/packaging            {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/type         {#{:db/id} #{pcd/datomic-resolver}}
+    :release/name                 {#{:db/id} #{pcd/datomic-resolver}}
+    :db/fn                        {#{:db/id} #{pcd/datomic-resolver}}
+    :release/artists              {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/name                  {#{:db/id} #{pcd/datomic-resolver}}
+    :db/index                     {#{:db/id} #{pcd/datomic-resolver}}
+    :label/endYear                {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/position              {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/type                  {#{:db/id} #{pcd/datomic-resolver}}
+    :db/unique                    {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/name         {#{:db/id} #{pcd/datomic-resolver}}
+    :label/startMonth             {#{:db/id} #{pcd/datomic-resolver}}
+    :db.excise/beforeT            {#{:db/id} #{pcd/datomic-resolver}}
+    :script/name                  {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/gid          {#{:db/id} #{pcd/datomic-resolver}}
+    :track/name                   {#{:db/id} #{pcd/datomic-resolver}}
+    :track/artists                {#{:db/id} #{pcd/datomic-resolver}}
+    :release/country              {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/country               {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/gid                   {#{:db/id} #{pcd/datomic-resolver}}
+    :db.sys/reId                  {#{:db/id} #{pcd/datomic-resolver}}
+    :db/valueType                 {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/startDay              {#{:db/id} #{pcd/datomic-resolver}}
+    :release/gid                  {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/endDay                {#{:db/id} #{pcd/datomic-resolver}}
+    :label/country                {#{:db/id} #{pcd/datomic-resolver}}
+    :db/txInstant                 {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/startYear             {#{:db/id} #{pcd/datomic-resolver}}
+    :release/labels               {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/endMonth              {#{:db/id} #{pcd/datomic-resolver}}
+    :release/language             {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/format                {#{:db/id} #{pcd/datomic-resolver}}
+    :release/day                  {#{:db/id} #{pcd/datomic-resolver}}
+    :db/noHistory                 {#{:db/id} #{pcd/datomic-resolver}}
+    :release/status               {#{:db/id} #{pcd/datomic-resolver}}
+    :label/sortName               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/isComponent               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/lang                      {#{:db/id} #{pcd/datomic-resolver}}
+    :db/fulltext                  {#{:db/id} #{pcd/datomic-resolver}}
+    :language/name                {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/endYear               {#{:db/id} #{pcd/datomic-resolver}}
+    :release/month                {#{:db/id} #{pcd/datomic-resolver}}
+    :release/artistCredit         {#{:db/id} #{pcd/datomic-resolver}}
+    :label/gid                    {#{:db/id} #{pcd/datomic-resolver}}
+    :country/name                 {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/name                  {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/artistCredit {#{:db/id} #{pcd/datomic-resolver}}
+    :release/abstractRelease      {#{:db/id} #{pcd/datomic-resolver}}
+    :label/startDay               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/cardinality               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/doc                       {#{:db/id} #{pcd/datomic-resolver}}
+    :db/id                        {#{:script/name}         #{pcd/datomic-resolver}
+                                   #{:abstractRelease/gid} #{pcd/datomic-resolver}
+                                   #{:artist/gid}          #{pcd/datomic-resolver}
+                                   #{:release/gid}         #{pcd/datomic-resolver}
+                                   #{:language/name}       #{pcd/datomic-resolver}
+                                   #{:label/gid}           #{pcd/datomic-resolver}
+                                   #{:country/name}        #{pcd/datomic-resolver}
+                                   #{:db/ident}            #{pcd/datomic-resolver}}
+    :db.excise/before             {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/startMonth            {#{:db/id} #{pcd/datomic-resolver}}
+    :track/duration               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/ident                     {#{:db/id} #{pcd/datomic-resolver}}
+    :db/code                      {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/gender                {#{:db/id} #{pcd/datomic-resolver}}
+    :track/position               {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/trackCount            {#{:db/id} #{pcd/datomic-resolver}}
+    :release/year                 {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/valueType         {#{:db/id} #{pcd/datomic-resolver}}
+    :label/endMonth               {#{:db/id} #{pcd/datomic-resolver}}
+    :db.alter/attribute           {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/function          {#{:db/id} #{pcd/datomic-resolver}}
+    :release/media                {#{:db/id} #{pcd/datomic-resolver}}
+    :label/endDay                 {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/partition         {#{:db/id} #{pcd/datomic-resolver}}
+    :label/startYear              {#{:db/id} #{pcd/datomic-resolver}}
+    :label/name                   {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/attribute         {#{:db/id} #{pcd/datomic-resolver}}
+    :db.excise/attrs              {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/tracks                {#{:db/id} #{pcd/datomic-resolver}}
+    :fressian/tag                 {#{:db/id} #{pcd/datomic-resolver}}
+    :release/barcode              {#{:db/id} #{pcd/datomic-resolver}}
+    :db.sys/partiallyIndexed      {#{:db/id} #{pcd/datomic-resolver}}
     :track/artistCredit           {#{:db/id} #{pcd/datomic-resolver}}})
 
 (deftest test-index-schema
@@ -771,29 +650,26 @@
                [?e :artist/startYear ?year]
                [(< ?year 1600)]]})})
 
+(def registry
+  [super-name
+   years-active
+   artists-before-1600
+   artist-before-1600])
+
 (def parser
   (p/parser
     {::p/env     {::p/reader               [p/map-reader
-                                            pc/reader2
+                                            pc/reader3
                                             pc/open-ident-reader
                                             p/env-placeholder-reader]
                   ::p/placeholder-prefixes #{">"}}
      ::p/mutate  pc/mutate
-     ::p/plugins [(pc/connect-plugin {::pc/register [super-name
-                                                     years-active
-                                                     artists-before-1600
-                                                     artist-before-1600]})
+     ::p/plugins [(pc/connect-plugin {::pc/register registry})
                   (pcd/datomic-connect-plugin (assoc on-prem-config
                                                 ::pcd/conn conn
                                                 ::pcd/ident-attributes #{:artist/type}))
                   p/error-handler-plugin
                   p/trace-plugin]}))
-
-(comment
-  (parser {}
-    [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
-      [:artist/name
-       {:artist/country [:country/name]}]}]))
 
 (deftest test-datomic-parser
   (testing "reading from :db/id"
@@ -871,7 +747,20 @@
               {:artist/type {:db/id 17592186045423}}})))))
 
 (comment
+  (pcd/config-parser on-prem-config {::pcd/conn conn}
+    [::pcd/schema])
+
   (pcd/config-parser on-prem-config {::pcd/conn conn} [::pcd/schema-keys])
+
+  (pcp/compute-run-graph
+    (merge
+      (-> (pcd/index-schema
+            (pcd/normalize-config (merge on-prem-config {::pcd/conn conn})))
+          (pc/register registry))
+      {:edn-query-language.ast/node (eql/query->ast
+                                      [{:release/artists
+                                        [:artist/super-name]}])
+       ::pcp/available-data         {:db/id {}}}))
 
   (parser {}
     [{::pc/indexes

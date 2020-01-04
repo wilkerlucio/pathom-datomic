@@ -513,63 +513,40 @@
              123)))))
 
 (def index-schema-output
-  `{:release/script               {#{:db/id} #{pcd/datomic-resolver}}
-    :label/type                   {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/sortName              {#{:db/id} #{pcd/datomic-resolver}}
+  `{:abstractRelease/artistCredit {#{:db/id} #{pcd/datomic-resolver}}
     :abstractRelease/artists      {#{:db/id} #{pcd/datomic-resolver}}
-    :db/excise                    {#{:db/id} #{pcd/datomic-resolver}}
-    :release/packaging            {#{:db/id} #{pcd/datomic-resolver}}
-    :abstractRelease/type         {#{:db/id} #{pcd/datomic-resolver}}
-    :release/name                 {#{:db/id} #{pcd/datomic-resolver}}
-    :db/fn                        {#{:db/id} #{pcd/datomic-resolver}}
-    :release/artists              {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/name                  {#{:db/id} #{pcd/datomic-resolver}}
-    :db/index                     {#{:db/id} #{pcd/datomic-resolver}}
-    :label/endYear                {#{:db/id} #{pcd/datomic-resolver}}
-    :medium/position              {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/type                  {#{:db/id} #{pcd/datomic-resolver}}
-    :db/unique                    {#{:db/id} #{pcd/datomic-resolver}}
-    :abstractRelease/name         {#{:db/id} #{pcd/datomic-resolver}}
-    :label/startMonth             {#{:db/id} #{pcd/datomic-resolver}}
-    :db.excise/beforeT            {#{:db/id} #{pcd/datomic-resolver}}
-    :script/name                  {#{:db/id} #{pcd/datomic-resolver}}
     :abstractRelease/gid          {#{:db/id} #{pcd/datomic-resolver}}
-    :track/name                   {#{:db/id} #{pcd/datomic-resolver}}
-    :track/artists                {#{:db/id} #{pcd/datomic-resolver}}
-    :release/country              {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/name         {#{:db/id} #{pcd/datomic-resolver}}
+    :abstractRelease/type         {#{:db/id} #{pcd/datomic-resolver}}
     :artist/country               {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/gid                   {#{:db/id} #{pcd/datomic-resolver}}
-    :db.sys/reId                  {#{:db/id} #{pcd/datomic-resolver}}
-    :db/valueType                 {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/startDay              {#{:db/id} #{pcd/datomic-resolver}}
-    :release/gid                  {#{:db/id} #{pcd/datomic-resolver}}
     :artist/endDay                {#{:db/id} #{pcd/datomic-resolver}}
-    :label/country                {#{:db/id} #{pcd/datomic-resolver}}
-    :db/txInstant                 {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/startYear             {#{:db/id} #{pcd/datomic-resolver}}
-    :release/labels               {#{:db/id} #{pcd/datomic-resolver}}
     :artist/endMonth              {#{:db/id} #{pcd/datomic-resolver}}
-    :release/language             {#{:db/id} #{pcd/datomic-resolver}}
-    :medium/format                {#{:db/id} #{pcd/datomic-resolver}}
-    :release/day                  {#{:db/id} #{pcd/datomic-resolver}}
-    :db/noHistory                 {#{:db/id} #{pcd/datomic-resolver}}
-    :release/status               {#{:db/id} #{pcd/datomic-resolver}}
-    :label/sortName               {#{:db/id} #{pcd/datomic-resolver}}
-    :db/isComponent               {#{:db/id} #{pcd/datomic-resolver}}
-    :db/lang                      {#{:db/id} #{pcd/datomic-resolver}}
-    :db/fulltext                  {#{:db/id} #{pcd/datomic-resolver}}
-    :language/name                {#{:db/id} #{pcd/datomic-resolver}}
     :artist/endYear               {#{:db/id} #{pcd/datomic-resolver}}
-    :release/month                {#{:db/id} #{pcd/datomic-resolver}}
-    :release/artistCredit         {#{:db/id} #{pcd/datomic-resolver}}
-    :label/gid                    {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/gender                {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/gid                   {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/name                  {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/sortName              {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/startDay              {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/startMonth            {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/startYear             {#{:db/id} #{pcd/datomic-resolver}}
+    :artist/type                  {#{:db/id} #{pcd/datomic-resolver}}
     :country/name                 {#{:db/id} #{pcd/datomic-resolver}}
-    :medium/name                  {#{:db/id} #{pcd/datomic-resolver}}
-    :abstractRelease/artistCredit {#{:db/id} #{pcd/datomic-resolver}}
-    :release/abstractRelease      {#{:db/id} #{pcd/datomic-resolver}}
-    :label/startDay               {#{:db/id} #{pcd/datomic-resolver}}
+    :db.alter/attribute           {#{:db/id} #{pcd/datomic-resolver}}
+    :db.excise/attrs              {#{:db/id} #{pcd/datomic-resolver}}
+    :db.excise/before             {#{:db/id} #{pcd/datomic-resolver}}
+    :db.excise/beforeT            {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/attribute         {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/function          {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/partition         {#{:db/id} #{pcd/datomic-resolver}}
+    :db.install/valueType         {#{:db/id} #{pcd/datomic-resolver}}
+    :db.sys/partiallyIndexed      {#{:db/id} #{pcd/datomic-resolver}}
+    :db.sys/reId                  {#{:db/id} #{pcd/datomic-resolver}}
     :db/cardinality               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/code                      {#{:db/id} #{pcd/datomic-resolver}}
     :db/doc                       {#{:db/id} #{pcd/datomic-resolver}}
+    :db/excise                    {#{:db/id} #{pcd/datomic-resolver}}
+    :db/fn                        {#{:db/id} #{pcd/datomic-resolver}}
+    :db/fulltext                  {#{:db/id} #{pcd/datomic-resolver}}
     :db/id                        {#{:script/name}         #{pcd/datomic-resolver}
                                    #{:abstractRelease/gid} #{pcd/datomic-resolver}
                                    #{:artist/gid}          #{pcd/datomic-resolver}
@@ -578,31 +555,54 @@
                                    #{:label/gid}           #{pcd/datomic-resolver}
                                    #{:country/name}        #{pcd/datomic-resolver}
                                    #{:db/ident}            #{pcd/datomic-resolver}}
-    :db.excise/before             {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/startMonth            {#{:db/id} #{pcd/datomic-resolver}}
-    :track/duration               {#{:db/id} #{pcd/datomic-resolver}}
     :db/ident                     {#{:db/id} #{pcd/datomic-resolver}}
-    :db/code                      {#{:db/id} #{pcd/datomic-resolver}}
-    :artist/gender                {#{:db/id} #{pcd/datomic-resolver}}
-    :track/position               {#{:db/id} #{pcd/datomic-resolver}}
-    :medium/trackCount            {#{:db/id} #{pcd/datomic-resolver}}
-    :release/year                 {#{:db/id} #{pcd/datomic-resolver}}
-    :db.install/valueType         {#{:db/id} #{pcd/datomic-resolver}}
-    :label/endMonth               {#{:db/id} #{pcd/datomic-resolver}}
-    :db.alter/attribute           {#{:db/id} #{pcd/datomic-resolver}}
-    :db.install/function          {#{:db/id} #{pcd/datomic-resolver}}
-    :release/media                {#{:db/id} #{pcd/datomic-resolver}}
-    :label/endDay                 {#{:db/id} #{pcd/datomic-resolver}}
-    :db.install/partition         {#{:db/id} #{pcd/datomic-resolver}}
-    :label/startYear              {#{:db/id} #{pcd/datomic-resolver}}
-    :label/name                   {#{:db/id} #{pcd/datomic-resolver}}
-    :db.install/attribute         {#{:db/id} #{pcd/datomic-resolver}}
-    :db.excise/attrs              {#{:db/id} #{pcd/datomic-resolver}}
-    :medium/tracks                {#{:db/id} #{pcd/datomic-resolver}}
+    :db/index                     {#{:db/id} #{pcd/datomic-resolver}}
+    :db/isComponent               {#{:db/id} #{pcd/datomic-resolver}}
+    :db/lang                      {#{:db/id} #{pcd/datomic-resolver}}
+    :db/noHistory                 {#{:db/id} #{pcd/datomic-resolver}}
+    :db/txInstant                 {#{:db/id} #{pcd/datomic-resolver}}
+    :db/unique                    {#{:db/id} #{pcd/datomic-resolver}}
+    :db/valueType                 {#{:db/id} #{pcd/datomic-resolver}}
     :fressian/tag                 {#{:db/id} #{pcd/datomic-resolver}}
+    :label/country                {#{:db/id} #{pcd/datomic-resolver}}
+    :label/endDay                 {#{:db/id} #{pcd/datomic-resolver}}
+    :label/endMonth               {#{:db/id} #{pcd/datomic-resolver}}
+    :label/endYear                {#{:db/id} #{pcd/datomic-resolver}}
+    :label/gid                    {#{:db/id} #{pcd/datomic-resolver}}
+    :label/name                   {#{:db/id} #{pcd/datomic-resolver}}
+    :label/sortName               {#{:db/id} #{pcd/datomic-resolver}}
+    :label/startDay               {#{:db/id} #{pcd/datomic-resolver}}
+    :label/startMonth             {#{:db/id} #{pcd/datomic-resolver}}
+    :label/startYear              {#{:db/id} #{pcd/datomic-resolver}}
+    :label/type                   {#{:db/id} #{pcd/datomic-resolver}}
+    :language/name                {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/format                {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/name                  {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/position              {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/trackCount            {#{:db/id} #{pcd/datomic-resolver}}
+    :medium/tracks                {#{:db/id} #{pcd/datomic-resolver}}
+    :release/abstractRelease      {#{:db/id} #{pcd/datomic-resolver}}
+    :release/artistCredit         {#{:db/id} #{pcd/datomic-resolver}}
+    :release/artists              {#{:db/id} #{pcd/datomic-resolver}}
     :release/barcode              {#{:db/id} #{pcd/datomic-resolver}}
-    :db.sys/partiallyIndexed      {#{:db/id} #{pcd/datomic-resolver}}
-    :track/artistCredit           {#{:db/id} #{pcd/datomic-resolver}}})
+    :release/country              {#{:db/id} #{pcd/datomic-resolver}}
+    :release/day                  {#{:db/id} #{pcd/datomic-resolver}}
+    :release/gid                  {#{:db/id} #{pcd/datomic-resolver}}
+    :release/labels               {#{:db/id} #{pcd/datomic-resolver}}
+    :release/language             {#{:db/id} #{pcd/datomic-resolver}}
+    :release/media                {#{:db/id} #{pcd/datomic-resolver}}
+    :release/month                {#{:db/id} #{pcd/datomic-resolver}}
+    :release/name                 {#{:db/id} #{pcd/datomic-resolver}}
+    :release/packaging            {#{:db/id} #{pcd/datomic-resolver}}
+    :release/script               {#{:db/id} #{pcd/datomic-resolver}}
+    :release/status               {#{:db/id} #{pcd/datomic-resolver}}
+    :release/year                 {#{:db/id} #{pcd/datomic-resolver}}
+    :script/name                  {#{:db/id} #{pcd/datomic-resolver}}
+    :track/artistCredit           {#{:db/id} #{pcd/datomic-resolver}}
+    :track/artists                {#{:db/id} #{pcd/datomic-resolver}}
+    :track/duration               {#{:db/id} #{pcd/datomic-resolver}}
+    :track/name                   {#{:db/id} #{pcd/datomic-resolver}}
+    :track/position               {#{:db/id} #{pcd/datomic-resolver}}})
 
 (def index-io-output
   {#{:abstractRelease/gid} #:db{:id {}}
@@ -627,16 +627,6 @@
                             :artist/startYear             {}
                             :artist/type                  #:db{:id {}}
                             :country/name                 {}
-                            :db.alter/attribute           #:db{:id {}}
-                            :db.excise/attrs              #:db{:id {}}
-                            :db.excise/before             {}
-                            :db.excise/beforeT            {}
-                            :db.install/attribute         #:db{:id {}}
-                            :db.install/function          #:db{:id {}}
-                            :db.install/partition         #:db{:id {}}
-                            :db.install/valueType         #:db{:id {}}
-                            :db.sys/partiallyIndexed      {}
-                            :db.sys/reId                  #:db{:id {}}
                             :fressian/tag                 {}
                             :label/country                #:db{:id {}}
                             :label/endDay                 {}

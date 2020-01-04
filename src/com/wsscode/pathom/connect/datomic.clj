@@ -209,7 +209,7 @@
         (into
           {}
           (comp
-            (remove (comp #{"db"} namespace :db/ident))
+            (remove (comp #(re-find #"^db\.?" %) namespace :db/ident))
             (map
               (fn [{:db/keys [ident valueType]}]
                 [ident (if (= {:db/ident :db.type/ref} valueType)

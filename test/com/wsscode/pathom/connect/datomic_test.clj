@@ -604,10 +604,106 @@
     :db.sys/partiallyIndexed      {#{:db/id} #{pcd/datomic-resolver}}
     :track/artistCredit           {#{:db/id} #{pcd/datomic-resolver}}})
 
+(def index-io-output
+  {#{:abstractRelease/gid} #:db{:id {}}
+   #{:artist/gid}          #:db{:id {}}
+   #{:country/name}        #:db{:id {}}
+   #{:db/ident}            #:db{:id {}}
+   #{:db/id}               {:abstractRelease/artistCredit {}
+                            :abstractRelease/artists      #:db{:id {}}
+                            :abstractRelease/gid          {}
+                            :abstractRelease/name         {}
+                            :abstractRelease/type         #:db{:id {}}
+                            :artist/country               #:db{:id {}}
+                            :artist/endDay                {}
+                            :artist/endMonth              {}
+                            :artist/endYear               {}
+                            :artist/gender                #:db{:id {}}
+                            :artist/gid                   {}
+                            :artist/name                  {}
+                            :artist/sortName              {}
+                            :artist/startDay              {}
+                            :artist/startMonth            {}
+                            :artist/startYear             {}
+                            :artist/type                  #:db{:id {}}
+                            :country/name                 {}
+                            :db.alter/attribute           #:db{:id {}}
+                            :db.excise/attrs              #:db{:id {}}
+                            :db.excise/before             {}
+                            :db.excise/beforeT            {}
+                            :db.install/attribute         #:db{:id {}}
+                            :db.install/function          #:db{:id {}}
+                            :db.install/partition         #:db{:id {}}
+                            :db.install/valueType         #:db{:id {}}
+                            :db.sys/partiallyIndexed      {}
+                            :db.sys/reId                  #:db{:id {}}
+                            :fressian/tag                 {}
+                            :label/country                #:db{:id {}}
+                            :label/endDay                 {}
+                            :label/endMonth               {}
+                            :label/endYear                {}
+                            :label/gid                    {}
+                            :label/name                   {}
+                            :label/sortName               {}
+                            :label/startDay               {}
+                            :label/startMonth             {}
+                            :label/startYear              {}
+                            :label/type                   #:db{:id {}}
+                            :language/name                {}
+                            :medium/format                #:db{:id {}}
+                            :medium/name                  {}
+                            :medium/position              {}
+                            :medium/trackCount            {}
+                            :medium/tracks                #:db{:id {}}
+                            :release/abstractRelease      #:db{:id {}}
+                            :release/artistCredit         {}
+                            :release/artists              #:db{:id {}}
+                            :release/barcode              {}
+                            :release/country              #:db{:id {}}
+                            :release/day                  {}
+                            :release/gid                  {}
+                            :release/labels               #:db{:id {}}
+                            :release/language             #:db{:id {}}
+                            :release/media                #:db{:id {}}
+                            :release/month                {}
+                            :release/name                 {}
+                            :release/packaging            #:db{:id {}}
+                            :release/script               #:db{:id {}}
+                            :release/status               {}
+                            :release/year                 {}
+                            :script/name                  {}
+                            :track/artistCredit           {}
+                            :track/artists                #:db{:id {}}
+                            :track/duration               {}
+                            :track/name                   {}
+                            :track/position               {}}
+   #{:label/gid}           #:db{:id {}}
+   #{:language/name}       #:db{:id {}}
+   #{:release/gid}         #:db{:id {}}
+   #{:script/name}         #:db{:id {}}})
+
+(def index-idents-output
+  #{:abstractRelease/gid
+    :artist/gid
+    :country/name
+    :db/id
+    :db/ident
+    :label/gid
+    :language/name
+    :release/gid
+    :script/name})
+
 (deftest test-index-schema
-  (let [index (pcd/index-schema {::pcd/schema db-schema-output})]
+  (let [index (pcd/index-schema
+                (pcd/normalize-config {::pcd/schema db-schema-output}))]
     (is (= (::pc/index-oir index)
-           index-schema-output))))
+           index-schema-output))
+
+    (is (= (::pc/index-io index)
+           index-io-output))
+
+    (is (= (::pc/idents index)
+           index-idents-output))))
 
 (deftest test-post-process-entity
   (is (= (pcd/post-process-entity
@@ -763,6 +859,12 @@
   (parser {}
     [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
       [:artist/type]}])
+
+  (pcd/index-io {::pcd/schema         db-schema-output
+                 ::pcd/schema-uniques (pcd/schema->uniques db-schema-output)})
+
+  (pcd/index-idents {::pcd/schema         db-schema-output
+                 ::pcd/schema-uniques (pcd/schema->uniques db-schema-output)})
 
   (parser {}
     [{:artist/artist-before-1600

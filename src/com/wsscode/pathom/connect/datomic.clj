@@ -200,9 +200,30 @@
     {}
     schema-keys))
 
+(defn index-io
+  [{::keys [schema schema-uniques]}]
+  (-> (zipmap
+        (map #(hash-set %) schema-uniques)
+        (repeat {:db/id {}}))
+      (assoc #{:db/id}
+        (into
+          {}
+          (comp
+            (remove (comp #{"db"} namespace :db/ident))
+            (map
+              (fn [{:db/keys [ident valueType]}]
+                [ident (if (= {:db/ident :db.type/ref} valueType)
+                         {:db/id {}}
+                         {})])))
+          (vals schema)))))
+
+(defn index-idents
+  [{::keys [schema-uniques]}]
+  (into #{} (conj schema-uniques :db/id)))
+
 (defn index-schema
   "Creates Pathom index from Datomic schema."
-  [{::keys [schema] :as config}]
+  [{::keys [schema schema-uniques] :as config}]
   (let [resolver  `datomic-resolver
         oir-paths {#{:db/id} #{resolver}}]
     {::pc/index-resolvers
@@ -217,8 +238,14 @@
      (->> (reduce
             (fn [idx {:db/keys [ident]}]
               (assoc idx ident oir-paths))
-            {:db/id (zipmap (map hash-set (schema->uniques schema)) (repeat #{resolver}))}
-            (vals schema)))}))
+            {:db/id (zipmap (map hash-set schema-uniques) (repeat #{resolver}))}
+            (vals schema)))
+
+     ::pc/index-io
+     (index-io config)
+
+     ::pc/idents
+     (index-idents config)}))
 
 (def registry
   [(pc/single-attr-resolver2 ::conn ::db raw-datomic-db)

@@ -115,7 +115,7 @@
     subquery))
 
 (defn node-subquery [{::pcp/keys [node]}]
-  (pci/io->query (::pcp/requires node)))
+  (eql/ast->query (::pcp/foreign-ast node)))
 
 (defn datomic-resolve
   "Runs the resolver to fetch Datomic data from identities."
@@ -156,10 +156,8 @@
 
                          ::pcp/available-data {:db/id {}}))
         datomic-node (pcp/get-node graph (-> graph ::pcp/index-syms (get `datomic-resolver) first))
-        subquery     (node-subquery {::pcp/node datomic-node})
-        base-query   (eql/ast->query (::pcp/foreign-ast datomic-node))]
-    (cond-> subquery (not (seq subquery)) (conj :db/id)))
-  )
+        subquery     (node-subquery {::pcp/node datomic-node})]
+    (conj subquery :db/id)))
 
 (defn query-entities
   "Use this helper from inside a resolver to run a Datomic query.
@@ -192,7 +190,7 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (map first
+    (mapv (comp #(or % {}) first)
       (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery))])
         db))))
 
@@ -311,8 +309,8 @@
        (let [idx-atoms (keep ::pc/indexes plugins)]
          (doseq [idx* idx-atoms]
            (swap! idx* pc/merge-indexes datomic-index))
-         (fn [env tx]
-           (let [db       (raw-datomic-db config' conn)
+         (fn [{::keys [db] :as env} tx]
+           (let [db       (or db (raw-datomic-db config' conn))
                  ; update datomic db on every parser call
                  config'' (assoc config' ::db db)]
              (parser (merge env config'') tx)))))}))

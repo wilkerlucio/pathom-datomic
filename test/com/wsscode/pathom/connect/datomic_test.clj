@@ -846,11 +846,18 @@
                [?e :artist/startYear ?year]
                [(< ?year 1600)]]})})
 
+(pc/defresolver all-mediums [env _]
+  {::pc/output [{:all-mediums [:db/id]}]}
+  {:all-mediums
+   (pcd/query-entities env
+     '{:where [[?e :medium/name _]]})})
+
 (def registry
   [super-name
    years-active
    artists-before-1600
-   artist-before-1600])
+   artist-before-1600
+   all-mediums])
 
 (def parser
   (p/parser
@@ -862,7 +869,8 @@
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register registry})
                   (pcd/datomic-connect-plugin (assoc db-config
-                                                ::pcd/conn conn))
+                                                ::pcd/conn conn
+                                                ::pcd/ident-attributes #{:artist/type}))
                   p/error-handler-plugin
                   p/trace-plugin]}))
 
@@ -909,6 +917,20 @@
             {:artist/super-name "SUPER - Heinrich Schütz",
              :artist/country    {:country/name "Germany"
                                  :db/id        17592186045657}}}))
+
+    (testing "partial missing information on entities"
+      (is (= (parser {::pcd/db (-> (d/with db
+                                     [{:medium/name "val"}
+                                      {:medium/name "6val"
+                                       :artist/name "bla"}
+                                      {:medium/name "3"
+                                       :artist/name "bar"}])
+                                   :db-after)}
+               [{:all-mediums
+                 [:artist/name :medium/name]}])
+             {:all-mediums [{:artist/name "bar", :medium/name "3"}
+                            {:artist/name :com.wsscode.pathom.core/not-found, :medium/name "val"}
+                            {:artist/name "bla", :medium/name "6val"}]})))
 
     (testing "nested complex dependency"
       (is (= (parser {}
@@ -1066,6 +1088,15 @@
              [:artist/type]}])
          {[:db/id 637716744120508]
           {:artist/type :artist.type/person}}))
+
+  (d/q '[:find (pull ?e [:artist/name]) :where [?e :medium/name _]]
+    (-> (d/with db
+          [{:medium/name "val"}
+           {:medium/name "6val"
+            :artist/name "bla"}
+           {:medium/name "3"
+            :artist/name "bar"}])
+        :db-after))
 
   (->> (d/q '[:find ?attr ?type ?card
               :where

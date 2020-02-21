@@ -862,8 +862,7 @@
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register registry})
                   (pcd/datomic-connect-plugin (assoc db-config
-                                                ::pcd/conn conn
-                                                ::pcd/ident-attributes #{:artist/type}))
+                                                ::pcd/conn conn))
                   p/error-handler-plugin
                   p/trace-plugin]}))
 

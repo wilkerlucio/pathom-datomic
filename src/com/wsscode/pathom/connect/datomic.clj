@@ -2,11 +2,14 @@
   (:require [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [com.wsscode.pathom.connect :as pc]
+            [com.wsscode.pathom.connect.indexes :as pci]
+            [com.wsscode.pathom.connect.planner :as pcp]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.sugar :as ps]
-            [edn-query-language.core :as eql]
-            [com.wsscode.pathom.connect.planner :as pcp]
-            [com.wsscode.pathom.connect.indexes :as pci]))
+            [edn-query-language.core :as eql])
+  (:import [org.slf4j LoggerFactory Logger]))
+
+(defonce logger ^Logger (LoggerFactory/getLogger "pathom-datomic"))
 
 (s/def ::db any?)
 (s/def ::schema (s/map-of ::p/attribute map?))
@@ -25,6 +28,7 @@
 (s/def ::schema (s/map-of :db/ident ::schema-entry))
 
 (defn raw-datomic-q [{::keys [datomic-driver-q]} & args]
+  (.debug logger "{}" args)
   (apply datomic-driver-q args))
 
 (defn raw-datomic-db [{::keys [datomic-driver-db]} conn]
@@ -188,7 +192,6 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
-    (clojure.pprint/pprint subquery)
     (map first
       (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery))])
         db))))

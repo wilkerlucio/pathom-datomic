@@ -13,6 +13,40 @@
 
 (def db (d/db conn))
 
+(def db-config
+  (assoc on-prem-config
+    ::pcd/whitelist ::pcd/DANGER_ALLOW_ALL!))
+
+(def whitelist
+  #{:artist/country
+    :artist/gid
+    :artist/name
+    :artist/sortName
+    :artist/type
+    :country/name
+    :medium/format
+    :medium/name
+    :medium/position
+    :medium/trackCount
+    :medium/tracks
+    :release/artists
+    :release/country
+    :release/day
+    :release/gid
+    :release/labels
+    :release/language
+    :release/media
+    :release/month
+    :release/name
+    :release/packaging
+    :release/script
+    :release/status
+    :release/year
+    :track/artists
+    :track/duration
+    :track/name
+    :track/position})
+
 (def db-schema-output
   {:abstractRelease/artistCredit #:db{:cardinality #:db{:ident :db.cardinality/one}
                                       :doc         "The string represenation of the artist(s) to be credited on the abstract release"
@@ -467,7 +501,7 @@
                                       :valueType   #:db{:ident :db.type/long}}})
 
 (deftest test-db->schema
-  (is (= (pcd/db->schema on-prem-config db)
+  (is (= (pcd/db->schema db-config db)
          db-schema-output)))
 
 (deftest test-schema->uniques
@@ -489,7 +523,7 @@
            [{:foo [:db/ident]}]))))
 
 (deftest test-pick-ident-key
-  (let [config (pcd/config-parser on-prem-config {::pcd/conn conn} [::pcd/schema-uniques])]
+  (let [config (pcd/normalize-config (merge db-config {::pcd/conn conn}))]
     (testing "nothing available"
       (is (= (pcd/pick-ident-key config
                {})
@@ -512,7 +546,7 @@
                 :artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"})
              123)))))
 
-(def index-schema-output
+(def index-oir-output
   `{:abstractRelease/artistCredit {#{:db/id} #{pcd/datomic-resolver}}
     :abstractRelease/artists      {#{:db/id} #{pcd/datomic-resolver}}
     :abstractRelease/gid          {#{:db/id} #{pcd/datomic-resolver}}
@@ -530,6 +564,14 @@
     :artist/startMonth            {#{:db/id} #{pcd/datomic-resolver}}
     :artist/startYear             {#{:db/id} #{pcd/datomic-resolver}}
     :artist/type                  {#{:db/id} #{pcd/datomic-resolver}}
+    :db/id                        {#{:abstractRelease/gid} #{pcd/datomic-resolver}
+                                   #{:artist/gid}          #{pcd/datomic-resolver}
+                                   #{:country/name}        #{pcd/datomic-resolver}
+                                   #{:db/ident}            #{pcd/datomic-resolver}
+                                   #{:label/gid}           #{pcd/datomic-resolver}
+                                   #{:language/name}       #{pcd/datomic-resolver}
+                                   #{:release/gid}         #{pcd/datomic-resolver}
+                                   #{:script/name}         #{pcd/datomic-resolver}}
     :country/name                 {#{:db/id} #{pcd/datomic-resolver}}
     :db.alter/attribute           {#{:db/id} #{pcd/datomic-resolver}}
     :db.excise/attrs              {#{:db/id} #{pcd/datomic-resolver}}
@@ -547,14 +589,6 @@
     :db/excise                    {#{:db/id} #{pcd/datomic-resolver}}
     :db/fn                        {#{:db/id} #{pcd/datomic-resolver}}
     :db/fulltext                  {#{:db/id} #{pcd/datomic-resolver}}
-    :db/id                        {#{:script/name}         #{pcd/datomic-resolver}
-                                   #{:abstractRelease/gid} #{pcd/datomic-resolver}
-                                   #{:artist/gid}          #{pcd/datomic-resolver}
-                                   #{:release/gid}         #{pcd/datomic-resolver}
-                                   #{:language/name}       #{pcd/datomic-resolver}
-                                   #{:label/gid}           #{pcd/datomic-resolver}
-                                   #{:country/name}        #{pcd/datomic-resolver}
-                                   #{:db/ident}            #{pcd/datomic-resolver}}
     :db/ident                     {#{:db/id} #{pcd/datomic-resolver}}
     :db/index                     {#{:db/id} #{pcd/datomic-resolver}}
     :db/isComponent               {#{:db/id} #{pcd/datomic-resolver}}
@@ -605,30 +639,28 @@
     :track/position               {#{:db/id} #{pcd/datomic-resolver}}})
 
 (def index-io-output
-  {#{:abstractRelease/gid} #:db{:id {}}
-   #{:artist/gid}          #:db{:id {}}
-   #{:country/name}        #:db{:id {}}
-   #{:db/ident}            #:db{:id {}}
+  {#{:abstractRelease/gid} {:db/id {}}
+   #{:artist/gid}          {:db/id {}}
    #{:db/id}               {:abstractRelease/artistCredit {}
-                            :abstractRelease/artists      #:db{:id {}}
+                            :abstractRelease/artists      {:db/id {}}
                             :abstractRelease/gid          {}
                             :abstractRelease/name         {}
-                            :abstractRelease/type         #:db{:id {}}
-                            :artist/country               #:db{:id {}}
+                            :abstractRelease/type         {:db/id {}}
+                            :artist/country               {:db/id {}}
                             :artist/endDay                {}
                             :artist/endMonth              {}
                             :artist/endYear               {}
-                            :artist/gender                #:db{:id {}}
+                            :artist/gender                {:db/id {}}
                             :artist/gid                   {}
                             :artist/name                  {}
                             :artist/sortName              {}
                             :artist/startDay              {}
                             :artist/startMonth            {}
                             :artist/startYear             {}
-                            :artist/type                  #:db{:id {}}
+                            :artist/type                  {:db/id {}}
                             :country/name                 {}
                             :fressian/tag                 {}
-                            :label/country                #:db{:id {}}
+                            :label/country                {:db/id {}}
                             :label/endDay                 {}
                             :label/endMonth               {}
                             :label/endYear                {}
@@ -638,39 +670,41 @@
                             :label/startDay               {}
                             :label/startMonth             {}
                             :label/startYear              {}
-                            :label/type                   #:db{:id {}}
+                            :label/type                   {:db/id {}}
                             :language/name                {}
-                            :medium/format                #:db{:id {}}
+                            :medium/format                {:db/id {}}
                             :medium/name                  {}
                             :medium/position              {}
                             :medium/trackCount            {}
-                            :medium/tracks                #:db{:id {}}
-                            :release/abstractRelease      #:db{:id {}}
+                            :medium/tracks                {:db/id {}}
+                            :release/abstractRelease      {:db/id {}}
                             :release/artistCredit         {}
-                            :release/artists              #:db{:id {}}
+                            :release/artists              {:db/id {}}
                             :release/barcode              {}
-                            :release/country              #:db{:id {}}
+                            :release/country              {:db/id {}}
                             :release/day                  {}
                             :release/gid                  {}
-                            :release/labels               #:db{:id {}}
-                            :release/language             #:db{:id {}}
-                            :release/media                #:db{:id {}}
+                            :release/labels               {:db/id {}}
+                            :release/language             {:db/id {}}
+                            :release/media                {:db/id {}}
                             :release/month                {}
                             :release/name                 {}
-                            :release/packaging            #:db{:id {}}
-                            :release/script               #:db{:id {}}
+                            :release/packaging            {:db/id {}}
+                            :release/script               {:db/id {}}
                             :release/status               {}
                             :release/year                 {}
                             :script/name                  {}
                             :track/artistCredit           {}
-                            :track/artists                #:db{:id {}}
+                            :track/artists                {:db/id {}}
                             :track/duration               {}
                             :track/name                   {}
                             :track/position               {}}
-   #{:label/gid}           #:db{:id {}}
-   #{:language/name}       #:db{:id {}}
-   #{:release/gid}         #:db{:id {}}
-   #{:script/name}         #:db{:id {}}})
+   #{:country/name}        {:db/id {}}
+   #{:db/ident}            {:db/id {}}
+   #{:label/gid}           {:db/id {}}
+   #{:language/name}       {:db/id {}}
+   #{:release/gid}         {:db/id {}}
+   #{:script/name}         {:db/id {}}})
 
 (def index-idents-output
   #{:abstractRelease/gid
@@ -685,15 +719,101 @@
 
 (deftest test-index-schema
   (let [index (pcd/index-schema
-                (pcd/normalize-config {::pcd/schema db-schema-output}))]
+                (pcd/normalize-config {::pcd/schema db-schema-output ::pcd/whitelist ::pcd/DANGER_ALLOW_ALL!}))]
     (is (= (::pc/index-oir index)
-           index-schema-output))
+           index-oir-output))
 
     (is (= (::pc/index-io index)
            index-io-output))
 
     (is (= (::pc/idents index)
            index-idents-output))))
+
+(def index-io-secure-output
+  {#{:artist/gid}   {:db/id {}}
+   #{:country/name} {:db/id {}}
+   #{:db/id}        {:artist/country    {:db/id {}}
+                     :artist/gid        {}
+                     :artist/name       {}
+                     :artist/sortName   {}
+                     :artist/type       {:db/id {}}
+                     :country/name      {}
+                     :medium/format     {:db/id {}}
+                     :medium/name       {}
+                     :medium/position   {}
+                     :medium/trackCount {}
+                     :medium/tracks     {:db/id {}}
+                     :release/artists   {:db/id {}}
+                     :release/country   {:db/id {}}
+                     :release/day       {}
+                     :release/gid       {}
+                     :release/labels    {:db/id {}}
+                     :release/language  {:db/id {}}
+                     :release/media     {:db/id {}}
+                     :release/month     {}
+                     :release/name      {}
+                     :release/packaging {:db/id {}}
+                     :release/script    {:db/id {}}
+                     :release/status    {}
+                     :release/year      {}
+                     :track/artists     {:db/id {}}
+                     :track/duration    {}
+                     :track/name        {}
+                     :track/position    {}}
+   #{:release/gid}  {:db/id {}}})
+
+(def index-idents-secure-output
+  #{:artist/gid
+    :country/name
+    :release/gid})
+
+(deftest test-index-schema-secure
+  (let [index (pcd/index-schema
+                (pcd/normalize-config
+                  (assoc db-config
+                    ::pcd/conn conn
+                    ::pcd/whitelist whitelist)))]
+    (is (= (::pc/index-oir index)
+           '{:artist/country    {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :artist/gid        {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :artist/name       {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :artist/sortName   {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :artist/type       {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :country/name      {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :db/id             {#{:artist/gid}   #{com.wsscode.pathom.connect.datomic/datomic-resolver}
+                                 #{:country/name} #{com.wsscode.pathom.connect.datomic/datomic-resolver}
+                                 #{:release/gid}  #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :medium/format     {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :medium/name       {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :medium/position   {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :medium/trackCount {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :medium/tracks     {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/artists   {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/country   {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/day       {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/gid       {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/labels    {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/language  {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/media     {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/month     {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/name      {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/packaging {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/script    {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/status    {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :release/year      {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :track/artists     {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :track/duration    {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :track/name        {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}
+             :track/position    {#{:db/id} #{com.wsscode.pathom.connect.datomic/datomic-resolver}}}))
+
+    (is (= (::pc/index-io index)
+           index-io-secure-output))
+
+    (is (= (::pc/idents index)
+           index-idents-secure-output))
+
+    (is (= (::pc/autocomplete-ignore index)
+           #{:db/id}))))
 
 (deftest test-post-process-entity
   (is (= (pcd/post-process-entity
@@ -741,7 +861,7 @@
                   ::p/placeholder-prefixes #{">"}}
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register registry})
-                  (pcd/datomic-connect-plugin (assoc on-prem-config
+                  (pcd/datomic-connect-plugin (assoc db-config
                                                 ::pcd/conn conn
                                                 ::pcd/ident-attributes #{:artist/type}))
                   p/error-handler-plugin
@@ -793,10 +913,10 @@
 
     (testing "nested complex dependency"
       (is (= (parser {}
-               [{[:db/id 17592186073058]
+               [{[:release/gid #uuid"b89a6f8b-5784-41d2-973d-dcd4d99b05c2"]
                  [{:release/artists
                    [:artist/super-name]}]}])
-             {[:db/id 17592186073058]
+             {[:release/gid #uuid"b89a6f8b-5784-41d2-973d-dcd4d99b05c2"]
               {:release/artists [{:artist/super-name "SUPER - Horst Jankowski"}]}})))
 
     (testing "without subquery"
@@ -812,9 +932,9 @@
 
     (testing "ident attributes"
       (is (= (parser {}
-               [{[:db/id 637716744120508]
+               [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
                  [:artist/type]}])
-             {[:db/id 637716744120508]
+             {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
               {:artist/type :artist.type/person}}))
       (is (= (parser {}
                [{[:db/id 637716744120508]
@@ -822,16 +942,94 @@
              {[:db/id 637716744120508]
               {:artist/type {:db/id 17592186045423}}})))))
 
+(def secure-parser
+  (p/parser
+    {::p/env     {::p/reader               [p/map-reader
+                                            pc/reader3
+                                            pc/open-ident-reader
+                                            p/env-placeholder-reader]
+                  ::p/placeholder-prefixes #{">"}}
+     ::p/mutate  pc/mutate
+     ::p/plugins [(pc/connect-plugin {::pc/register registry})
+                  (pcd/datomic-connect-plugin
+                    (assoc db-config
+                      ::pcd/conn conn
+                      ::pcd/whitelist whitelist
+                      ::pcd/ident-attributes #{:artist/type}))
+                  p/error-handler-plugin
+                  p/trace-plugin]}))
+
+(deftest test-datomic-secure-parser
+  (testing "don't allow access with :db/id"
+    (is (= (secure-parser {}
+             [{[:db/id 637716744120508]
+               [:artist/name]}])
+           {[:db/id 637716744120508] {:artist/name ::p/not-found}})))
+
+  (testing "not found for fields not listed"
+    (is (= (secure-parser {}
+             [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+               [:artist/name :artist/gender]}])
+           {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+            {:artist/name   "Janis Joplin"
+             :artist/gender ::p/not-found}})))
+
+  (testing "not found for :db/id when its not allowed"
+    (is (= (secure-parser {}
+             [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+               [:artist/name :db/id]}])
+           {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+            {:artist/name "Janis Joplin"
+             :db/id       ::p/not-found}})))
+
+  (testing "implicit dependency"
+    (is (= (secure-parser {}
+             [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+               [:artist/super-name]}])
+           {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+            {:artist/super-name "SUPER - Janis Joplin"}})))
+
+  (testing "process-query"
+    (is (= (secure-parser {}
+             [{:artist/artists-before-1600
+               [:artist/super-name
+                {:artist/country
+                 [:country/name]}]}])
+           {:artist/artists-before-1600
+            [{:artist/super-name "SUPER - Heinrich Schütz",
+              :artist/country    {:country/name "Germany"}}
+             {:artist/super-name "SUPER - Choir of King's College, Cambridge",
+              :artist/country    {:country/name "United Kingdom"}}]}))
+
+    (is (= (secure-parser {}
+             [{:artist/artist-before-1600
+               [:artist/super-name
+                {:artist/country
+                 [:country/name
+                  :db/id]}]}])
+           {:artist/artist-before-1600
+            {:artist/super-name "SUPER - Heinrich Schütz",
+             :artist/country    {:country/name "Germany"
+                                 :db/id        17592186045657}}}))
+
+    (testing "nested complex dependency"
+      (is (= (secure-parser {}
+               [{[:release/gid #uuid"b89a6f8b-5784-41d2-973d-dcd4d99b05c2"]
+                 [{:release/artists
+                   [:artist/super-name]}]}])
+             {[:release/gid #uuid"b89a6f8b-5784-41d2-973d-dcd4d99b05c2"]
+              {:release/artists [{:artist/super-name "SUPER - Horst Jankowski"}]}})))))
+
 (comment
-  (pcd/config-parser on-prem-config {::pcd/conn conn}
+  (pcd/config-parser db-config {::pcd/conn conn}
     [::pcd/schema])
 
-  (pcd/config-parser on-prem-config {::pcd/conn conn} [::pcd/schema-keys])
+  (pcd/config-parser db-config {::pcd/conn conn} [::pcd/schema-keys])
 
   (pcp/compute-run-graph
     (merge
       (-> (pcd/index-schema
-            (pcd/normalize-config (merge on-prem-config {::pcd/conn conn})))
+            (pcd/normalize-config (merge db-config {::pcd/conn conn})))
           (pc/register registry))
       {:edn-query-language.ast/node (eql/query->ast
                                       [{:release/artists
@@ -842,6 +1040,7 @@
     [{::pc/indexes
       [::pc/index-oir]}])
 
+  :q [:find ?a :where [?e ?a _] [(< ?e 100)]]
   (parser {}
     [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
       [:artist/active-years-count]}])

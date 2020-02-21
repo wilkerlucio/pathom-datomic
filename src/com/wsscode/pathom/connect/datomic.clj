@@ -13,6 +13,9 @@
 (s/def ::schema-keys (s/coll-of ::p/attribute :kind set?))
 (s/def ::schema-uniques ::schema-keys)
 (s/def ::ident-attributes ::schema-keys)
+(s/def ::whitelist
+  (s/or :whitelist (s/coll-of ::p/attribute :kind set?)
+        :all-all #{::DANGER_ALLOW_ALL!}))
 
 (s/def ::schema-entry
   (s/keys
@@ -27,6 +30,13 @@
 (defn raw-datomic-db [{::keys [datomic-driver-db]} conn]
   (datomic-driver-db conn))
 
+(defn allowed-attr? [{::keys [whitelist]} attr]
+  (or (and (set? whitelist) (contains? whitelist attr))
+      (= ::DANGER_ALLOW_ALL! whitelist)))
+
+(defn db-id-allowed? [config]
+  (allowed-attr? config :db/id))
+
 (defn db->schema
   "Extracts the schema from a Datomic db."
   [env db]
@@ -39,7 +49,9 @@
        (map first)
        (reduce
          (fn [schema entry]
-           (assoc schema (:db/ident entry) entry))
+           (if (allowed-attr? env (:db/ident entry))
+             (assoc schema (:db/ident entry) entry)
+             schema))
          {})))
 
 (defn schema->uniques
@@ -69,8 +81,9 @@
   Otherwise will look for some attribute that is a unique and is on
   the map, in case of multiple one will be selected by random. The
   format of the unique return is [:attribute value]."
-  [{::keys [schema-uniques]} m]
-  (if (contains? m :db/id)
+  [{::keys [schema-uniques] :as config} m]
+  (if (and (contains? m :db/id)
+           (db-id-allowed? config))
     (:db/id m)
 
     (let [available (set/intersection schema-uniques (into #{} (keys m)))]
@@ -131,7 +144,7 @@
 (defn entity-subquery
   "Using the current :query in the env, compute what part of it can be
   delegated to Datomic."
-  [{:keys [query] ::pc/keys [indexes] :as env}]
+  [{:keys [query] ::pc/keys [indexes] ::pcp/keys [node] :as env}]
   (let [graph        (pcp/compute-run-graph
                        (assoc indexes
                          :edn-query-language.ast/node
@@ -139,8 +152,10 @@
 
                          ::pcp/available-data {:db/id {}}))
         datomic-node (pcp/get-node graph (-> graph ::pcp/index-syms (get `datomic-resolver) first))
-        subquery     (node-subquery {::pcp/node datomic-node})]
-    (cond-> subquery (not (seq subquery)) (conj :db/id))))
+        subquery     (node-subquery {::pcp/node datomic-node})
+        base-query   (eql/ast->query (::pcp/foreign-ast datomic-node))]
+    (cond-> subquery (not (seq subquery)) (conj :db/id)))
+  )
 
 (defn query-entities
   "Use this helper from inside a resolver to run a Datomic query.
@@ -173,6 +188,7 @@
   like `:not-in/datomic`."
   [{::keys [db] :as env} dquery]
   (let [subquery (entity-subquery env)]
+    (clojure.pprint/pprint subquery)
     (map first
       (raw-datomic-q env (assoc dquery :find [(list 'pull '?e (inject-ident-subqueries env subquery))])
         db))))
@@ -200,6 +216,16 @@
     {}
     schema-keys))
 
+(defn index-oir
+  [{::keys [schema schema-uniques]}]
+  (let [resolver  `datomic-resolver
+        oir-paths {#{:db/id} #{resolver}}]
+    (->> (reduce
+           (fn [idx {:db/keys [ident]}]
+             (assoc idx ident oir-paths))
+           {:db/id (zipmap (map hash-set schema-uniques) (repeat #{resolver}))}
+           (vals schema)))))
+
 (defn index-io
   [{::keys [schema schema-uniques]}]
   (-> (zipmap
@@ -218,14 +244,13 @@
           (vals schema)))))
 
 (defn index-idents
-  [{::keys [schema-uniques]}]
-  (into #{} (conj schema-uniques :db/id)))
+  [{::keys [schema-uniques] :as config}]
+  (into #{} (cond-> schema-uniques (db-id-allowed? config) (conj :db/id))))
 
 (defn index-schema
   "Creates Pathom index from Datomic schema."
-  [{::keys [schema schema-uniques] :as config}]
-  (let [resolver  `datomic-resolver
-        oir-paths {#{:db/id} #{resolver}}]
+  [config]
+  (let [resolver `datomic-resolver]
     {::pc/index-resolvers
      {resolver {::datomic?             true
                 ::pc/sym               resolver
@@ -235,17 +260,16 @@
                 ::pc/resolve           (fn [env _] (datomic-resolve config env))}}
 
      ::pc/index-oir
-     (->> (reduce
-            (fn [idx {:db/keys [ident]}]
-              (assoc idx ident oir-paths))
-            {:db/id (zipmap (map hash-set schema-uniques) (repeat #{resolver}))}
-            (vals schema)))
+     (index-oir config)
 
      ::pc/index-io
      (index-io config)
 
      ::pc/idents
-     (index-idents config)}))
+     (index-idents config)
+
+     ::pc/autocomplete-ignore
+     (if (db-id-allowed? config) #{} #{:db/id})}))
 
 (def registry
   [(pc/single-attr-resolver2 ::conn ::db raw-datomic-db)
@@ -261,7 +285,7 @@
   [config]
   (config-parser config config
     [::conn ::db ::schema ::schema-uniques ::schema-keys ::ident-attributes
-     ::datomic-driver-db ::datomic-driver-q]))
+     ::datomic-driver-db ::datomic-driver-q ::whitelist]))
 
 (defn datomic-connect-plugin
   "Plugin to add datomic integration.
@@ -275,7 +299,11 @@
   [{::keys [conn] :as config}]
   (let [config'       (normalize-config config)
         datomic-index (index-schema config')]
-    {::p/wrap-parser2
+    {::p/intercept-output
+     (fn [env v]
+       v)
+
+     ::p/wrap-parser2
      (fn [parser {::p/keys [plugins]}]
        (let [idx-atoms (keep ::pc/indexes plugins)]
          (doseq [idx* idx-atoms]

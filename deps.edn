@@ -2,7 +2,7 @@
  ["src"]
 
  :deps
- {com.wsscode/pathom  {:mvn/version "2.2.25"}
+ {com.wsscode/pathom  {:mvn/version "2.3.0-alpha4"}
   org.slf4j/slf4j-api {:mvn/version "1.7.30"}}
 
  :aliases

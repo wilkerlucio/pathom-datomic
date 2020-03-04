@@ -2,14 +2,18 @@
  ["src"]
 
  :deps
- {com.wsscode/pathom {:mvn/version "2.2.25"}}
+ {com.wsscode/pathom  {:mvn/version "2.3.0-alpha4"}
+  org.slf4j/slf4j-api {:mvn/version "1.7.30"}}
 
  :aliases
  {:provided
   {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}
 
   :dev
-  {:extra-deps {com.datomic/datomic-free {:mvn/version "0.9.5703.21"}}}
+  {:extra-deps {ch.qos.logback/logback-classic {:mvn/version "1.2.3"}}}
+
+  :on-prem
+  {:extra-deps {com.datomic/datomic-free       {:mvn/version "0.9.5703.21"}}}
 
   :test
   {:extra-paths ["test"]

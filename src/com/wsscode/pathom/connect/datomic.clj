@@ -119,9 +119,9 @@
 
 (defn datomic-resolve
   "Runs the resolver to fetch Datomic data from identities."
-  [{::keys [db]
-    :as    config}
-   env]
+  [config
+   {::keys [db]
+    :as    env}]
   (let [id       (pick-ident-key config (p/entity env))
         subquery (node-subquery env)]
     (cond

@@ -888,6 +888,26 @@
            {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
             {:artist/name "Janis Joplin"}})))
 
+  (testing "explicit db"
+    (is (= (parser {::pcd/db (:db-after (d/with (d/db conn)
+                                                [{:artist/gid  #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"
+                                                  :artist/name "not Janis Joplin"}]))}
+                   [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+                     [:artist/name]}])
+           {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+            {:artist/name "not Janis Joplin"}})))
+
+  (comment
+    "after transact data (I will not transact in your mbrainz), parser should take a new db"
+    (d/transact conn
+                [{:artist/gid  #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"
+                  :artist/name "not Janis Joplin"}])
+    (is (= (parser {}
+                   [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+                     [:artist/name]}])
+           {[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
+            {:artist/name "not Janis Joplin"}})))
+
   (testing "implicit dependency"
     (is (= (parser {}
              [{[:artist/gid #uuid"76c9a186-75bd-436a-85c0-823e3efddb7f"]
@@ -1074,7 +1094,7 @@
                  ::pcd/schema-uniques (pcd/schema->uniques db-schema-output)})
 
   (pcd/index-idents {::pcd/schema         db-schema-output
-                 ::pcd/schema-uniques (pcd/schema->uniques db-schema-output)})
+                     ::pcd/schema-uniques (pcd/schema->uniques db-schema-output)})
 
   (parser {}
     [{:artist/artist-before-1600

@@ -182,8 +182,8 @@
 
       [{:artist/artists-before-1600
         [:artist/name
+         :not-in/datomic
          {:artist/country
-          :not-in/datomic
           [:country/name]}]}]
 
   The sub-query will be send to Datomic, filtering out unsupported keys

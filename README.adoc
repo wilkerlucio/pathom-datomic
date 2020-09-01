@@ -41,6 +41,36 @@ Example setup:
             [com.wsscode.pathom.connect.datomic.on-prem :refer [on-prem-config]]
             [com.wsscode.pathom.core :as p]))
 
+(def whitelist-attributes
+  #{:artist/country
+    :artist/gid
+    :artist/name
+    :artist/sortName
+    :artist/type
+    :country/name
+    :medium/format
+    :medium/name
+    :medium/position
+    :medium/trackCount
+    :medium/tracks
+    :release/artists
+    :release/country
+    :release/day
+    :release/gid
+    :release/labels
+    :release/language
+    :release/media
+    :release/month
+    :release/name
+    :release/packaging
+    :release/script
+    :release/status
+    :release/year
+    :track/artists
+    :track/duration
+    :track/name
+    :track/position})
+
 (def parser
   (p/parser
     {::p/env     {::p/reader               [p/map-reader
@@ -51,18 +81,25 @@ Example setup:
      ::p/mutate  pc/mutate
      ::p/plugins [(pc/connect-plugin {::pc/register []})
                   ; <1>
-                  (pcd/datomic-connect-plugin (assoc on-prem-config ::pcd/conn conn))
+                  (pcd/datomic-connect-plugin (assoc on-prem-config
+                                                ::pcd/conn conn
+                                                ::pcd/whitelist whitelist-attributes}))
                   p/error-handler-plugin
                   p/trace-plugin]}))
 ----
 
-<1> Datomic connect integration plugin
+<1> Datomic connect integration plugin. The whilelist part is where you decide which
+attribute are going to be automatically available.
 
 NOTE: We are using the `on-prem` config for this tutorial, if you wanna connect using
 the client api, get the config from `com.wsscode.pathom.connect.datomic.client/client-config`
 
-This setup will automatically provides entry points using `:db/id` and also one for
-every Datomic attribute marked with `:unique true`.
+This setup will automatically provides entry points for every Datomic attribute marked
+with `:unique true`.
+
+CAUTION: If you add `:db/id` to the whitelist, you can allow referencing using it, but
+be careful, if nothing else is done (via plugin or other way) to secure access, this means
+any user of the API could see any entity.
 
 Example queries we can run:
 
@@ -195,6 +232,13 @@ To handle custom sets of entities, we recommend using the helpers `query-entity`
 Note the Datalog query `must` use the map format. The `:find` part will be automatically
 fulfilled by Pathom, considering the sub query requested in the process, this way you
 don't need to care ahead of time.
+
+== Opening all data
+
+You can enable the integration to pull everything from Datomic, this can be useful on
+initial development, but be aware this opens the entire Datomic to the external world.
+
+To do this, use `::pcd/whitelist ::pcd/DANGER_ALLOW_ALL!`.
 
 == Next steps
 

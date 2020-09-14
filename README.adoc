@@ -74,7 +74,7 @@ Example setup:
 (def parser
   (p/parser
     {::p/env     {::p/reader               [p/map-reader
-                                            pc/reader2
+                                            pc/reader3
                                             pc/open-ident-reader
                                             p/env-placeholder-reader]
                   ::p/placeholder-prefixes #{">"}}

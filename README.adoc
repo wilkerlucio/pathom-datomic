@@ -14,6 +14,11 @@ This package includes functions to integrate Datomic with Pathom Connect.
 
 WARNING: Project in alpha state, need volunteers to try it out!
 
+Also, this project uses the `reader3` from Pathom, which also still needs production
+grade testing. I recommend this project for people trying to experiment
+and help the development of these new pieces, if you need production tested implementations
+its better to avoid pathom-datomic at this time.
+
 == Setup
 
 Currently supported only with deps:
@@ -74,7 +79,7 @@ Example setup:
 (def parser
   (p/parser
     {::p/env     {::p/reader               [p/map-reader
-                                            pc/reader2
+                                            pc/reader3
                                             pc/open-ident-reader
                                             p/env-placeholder-reader]
                   ::p/placeholder-prefixes #{">"}}

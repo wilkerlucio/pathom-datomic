@@ -41,6 +41,7 @@
 (defn db-id-allowed? [config]
   (allowed-attr? config :db/id))
 
+
 (defn db->schema
   "Extracts the schema from a Datomic db."
   [env db]
@@ -58,6 +59,7 @@
              schema))
          {})))
 
+
 (defn schema->uniques
   "Return a set with the ident of the unique attributes in the schema."
   [schema]
@@ -65,6 +67,51 @@
        vals
        (filter :db/unique)
        (into #{} (map :db/ident))))
+
+
+(defn is-db-ident?
+  "Takes a Datomic schema entry.
+   Returns true if the namespace of the `:db/ident` key of that entry
+   starts with `db` or `db.<something>`. False otherwise."
+  [entry]
+  (->> entry :db/ident namespace (re-find #"^db(\..*|)$") some?))
+
+
+(defn is-ref?
+  "Takes a Datomic schema entry.
+   Returns true if the value type of the entry is a ref. False otherwise."
+  [{:db/keys [valueType]}]
+  (= valueType {:db/ident :db.type/ref}))
+
+
+(defn schema->refs
+  "Return a set with the ident of the ref attributes in the schema.
+   Disregards any idents with built-in `db` prefix."
+  [schema]
+  (->> schema
+       vals
+       (filter #(and (is-ref? %)
+                     (not (is-db-ident? %))))
+       (into #{} (map :db/ident))))
+
+
+(defn make-back-nav
+  "Takes a keyword.
+   Returns the same keyword, with `_` prepended before the name part of the keyword.
+   I.e., `my.example/reference` -> `my.example/_reference`."
+  [dispatch-key]
+  (let [[ns* name*] ((juxt namespace name) dispatch-key)]
+    (keyword (str (when ns* (str ns* "/"))
+                  (str "_" name*)))))
+
+
+(defn schema->back-navs
+  "Takes a schema.
+   Returns a set of all non-db-internal refs, transformed into back-navs.
+   I.e., the set of `my.example/reference` -> `my.example/_reference`."
+  [schema]
+  (set (map make-back-nav (schema->refs schema))))
+
 
 (defn- prop [k]
   {:type :prop :dispatch-key k :key k})
@@ -207,46 +254,54 @@
 (defn ref-attribute? [{::keys [schema]} attr]
   (= :db.type/ref (get-in schema [attr :db/valueType :db/ident])))
 
+
 (defn schema-provides
-  [{::keys [schema-keys] :as config}]
+  [{::keys [schema-keys schema-back-navs] :as config}]
   (reduce
     (fn [provides attr]
-      (assoc provides attr (if (ref-attribute? config attr)
+      (assoc provides attr (if (or (ref-attribute? config attr)
+                                   (get schema-back-navs attr))
                              {:db/id {}}
                              {})))
     {}
     schema-keys))
 
+
 (defn index-oir
-  [{::keys [schema schema-uniques]}]
+  [{::keys [schema schema-uniques schema-back-navs]}]
   (let [resolver  `datomic-resolver
         oir-paths {#{:db/id} #{resolver}}]
-    (->> (reduce
-           (fn [idx {:db/keys [ident]}]
-             (assoc idx ident oir-paths))
-           {:db/id (zipmap (map hash-set schema-uniques) (repeat #{resolver}))}
-           (vals schema)))))
+    (merge (reduce
+             (fn [idx {:db/keys [ident]}]
+               (assoc idx ident oir-paths))
+             {:db/id (zipmap (map hash-set schema-uniques)
+                             (repeat #{resolver}))}
+             (vals schema))
+           (zipmap schema-back-navs (repeat {#{:db/id} #{resolver}})))))
+
 
 (defn index-io
-  [{::keys [schema schema-uniques]}]
+  [{::keys [schema schema-uniques schema-back-navs]}]
   (-> (zipmap
         (map #(hash-set %) schema-uniques)
         (repeat {:db/id {}}))
       (assoc #{:db/id}
-        (into
-          {}
-          (comp
-            (remove (comp #(some->> % (re-find #"^db\.?")) namespace :db/ident))
-            (map
-              (fn [{:db/keys [ident valueType]}]
-                [ident (if (= {:db/ident :db.type/ref} valueType)
-                         {:db/id {}}
-                         {})])))
-          (vals schema)))))
+        (merge (into {}
+                 (comp
+                   (remove is-db-ident?)
+                   (map
+                     (fn [{:db/keys [ident valueType]}]
+                       [ident (if (= {:db/ident :db.type/ref} valueType)
+                                {:db/id {}}
+                                {})])))
+                 (vals schema))
+               (zipmap schema-back-navs (repeat {:db/id {}}))))))
+
 
 (defn index-idents
   [{::keys [schema-uniques] :as config}]
   (into #{} (cond-> schema-uniques (db-id-allowed? config) (conj :db/id))))
+
 
 (defn index-schema
   "Creates Pathom index from Datomic schema."
@@ -272,21 +327,41 @@
      ::pc/autocomplete-ignore
      (if (db-id-allowed? config) #{} #{:db/id})}))
 
+
+(defn schema->keys
+  "Takes a schema.
+   Returns a set of all schema keys, including back-navigations and :db/id."
+  [schema]
+  (reduce into #{:db/id} [(keys schema) (schema->back-navs schema)]))
+
+
 (def registry
   [(pc/single-attr-resolver2 ::conn ::db raw-datomic-db)
    (pc/single-attr-resolver2 ::db ::schema db->schema)
-   (pc/single-attr-resolver ::schema ::schema-keys #(into #{:db/id} (keys %)))
+   (pc/single-attr-resolver ::schema ::schema-keys schema->keys)
    (pc/single-attr-resolver ::schema ::schema-uniques schema->uniques)
+   (pc/single-attr-resolver ::schema ::schema-back-navs schema->back-navs)
    (pc/constantly-resolver ::ident-attributes #{})])
 
+
 (def config-parser (-> registry ps/connect-serial-parser ps/context-parser))
+
 
 (defn normalize-config
   "Fulfill missing configuration options using inferences."
   [config]
   (config-parser config config
-    [::conn ::db ::schema ::schema-uniques ::schema-keys ::ident-attributes
-     ::datomic-driver-db ::datomic-driver-q ::whitelist]))
+    [::conn
+     ::db
+     ::schema
+     ::schema-uniques
+     ::schema-back-navs
+     ::schema-keys
+     ::ident-attributes
+     ::datomic-driver-db
+     ::datomic-driver-q
+     ::whitelist]))
+
 
 (defn datomic-connect-plugin
   "Plugin to add datomic integration.

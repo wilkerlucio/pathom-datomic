@@ -25,6 +25,7 @@
     :req [:db/ident :db/id :db/valueType :db/cardinality]
     :opt [:db/doc :db/unique]))
 
+(s/def :db/ident keyword?)
 (s/def ::schema (s/map-of :db/ident ::schema-entry))
 
 (defn raw-datomic-q [{::keys [datomic-driver-q]} & args]
